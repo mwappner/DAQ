@@ -10,6 +10,8 @@ linear_fit : function
     Applies linear fit and returns m, b and Rsq. Can also plot it.
 nonlinear_fit : function
     Applies nonlinear fit and returns parameters and Rsq. Plots it.
+smooth : function
+    Smooths data using a window with requested size.
 
 @author: Vall
 """
@@ -284,7 +286,7 @@ def nonlinear_fit(X, Y, fitfunction, initial_guess=None, dY=None,
         both as tuples.
     
     Other Parameters
-    ----------------
+    -----------------
     txt_position : tuple (horizontal, vertical), optional
         Indicates the parameters' text position. Each of its values 
         should be a number (distance in points measured on figure). 
@@ -405,3 +407,78 @@ def nonlinear_fit(X, Y, fitfunction, initial_guess=None, dY=None,
     parameters = list(zip(parameters, parameters_error))
     
     return rsq, parameters
+
+#%%
+
+def smooth(X, window_len=11, window='hanning'):
+    """Smooths data using a window with requested size.
+    
+    This method is based on the convolution of a scaled window with the 
+    signal. The signal is prepared by introducing reflected copies of 
+    the signal (with the window size) in both ends so that transient 
+    parts are minimized in the begining and end part of the output 
+    signal.
+    
+    Parameters
+    ----------
+    X : np.array
+        Input signal 
+    window_len : int {1, 3, 5, ...}
+        Dimension of the smoothing window; should be an odd integer
+    window : str {'flat', 'hanning', 'hamming', 'bartlett', 'blackman'}
+        Type of window; i.e. flat window will produce a moving average 
+        smoothing. Could be the window itself if an array instead of a 
+        string.
+
+    Returns
+    -------
+    np.array
+        Smoothed signal
+        
+    Examples
+    --------
+    >>> t = np.linspace(-2,2,0.1)
+    >>> x = np.sin(t) + np.randn(len(t))*0.1
+    >>> y = smooth(x)
+    
+    See Also
+    --------
+    numpy.hanning
+    numpy.hamming
+    numpy.bartlett
+    numpy.blackman
+    numpy.convolve
+    scipy.signal.lfilter
+    
+    Warnings
+    --------
+    Beware! This was taken from: SciPy-CookBook/ipython/SignalSmooth.py
+    
+    length(output) != length(input). To correct this: return 
+    y[(window_len/2-1):-(window_len/2)] instead of just y.
+      
+    """
+
+    if X.ndim != 1:
+        raise ValueError("X should be a 1 dimension array.")
+
+    if X.size < window_len:
+        raise ValueError("X needs to be bigger than window_len.")
+
+    if window_len < 3:
+        return X
+
+    allowed = ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']
+    if not window in allowed:
+        raise ValueError("Window should be on {}".format(allowed))
+
+    S = np.r_[X[window_len-1 : 0 : -1], X, X[-2 : -window_len-1 : -1]]
+
+    if window == 'flat': # moving average
+        W = np.ones(window_len, 'd')
+    else:
+        W = eval('np.' + window + '(window_len)')
+    
+    Y = np.convolve(W/W.sum(), S, mode='valid')
+    
+    return Y
