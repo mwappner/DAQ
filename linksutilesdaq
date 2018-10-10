@@ -1,0 +1,10 @@
+https://media.readthedocs.org/pdf/nidaqmx-python/latest/nidaqmx-python.pdf
+
+https://github.com/ni/nidaqmx-python/
+
+https://nidaqmx-python.readthedocs.io/en/latest/index.html
+
+http://wiki.freepascal.org/NI-DAQmx_and_NI-DAQmx_Base_examples#ANALOG_INPUTS.2FOUTPUTS
+(ejemplos comentados :D)
+
+https://github.com/ni/nidaqmx-python/blob/master/nidaqmx/tests/test_stream_analog_readers_writers.py
