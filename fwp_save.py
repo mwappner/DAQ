@@ -173,7 +173,7 @@ def saveplot(file, overwrite=False):
 
 #%%
 
-def savetext(datanumpylike, file, overwrite=False):
+def savetext(datanumpylike, file, overwrite=False, header=''):
     
     """Takes some array-like data and saves it on a '.txt' file.
     
@@ -191,6 +191,8 @@ def savetext(datanumpylike, file, overwrite=False):
         The name you wish (must include full path and extension)
     overwrite=False : bool
         Indicates whether to overwrite or not.
+    header='' : list
+        Data's descriptor. Its elements should be str, one per column.
     
     Return
     ------
@@ -209,6 +211,9 @@ def savetext(datanumpylike, file, overwrite=False):
     base = os.path.split(file)[0]
     if not os.path.isdir(base):
         os.makedirs(base)
+    
+    if header != '':
+        header = '# ' + '\t'.join(header) + '\n'
 
     file = os.path.join(
             base,
@@ -219,7 +224,7 @@ def savetext(datanumpylike, file, overwrite=False):
         file = free_file(file)
         
     np.savetxt(file, np.array(datanumpylike), 
-               delimiter='\t', newline='\n')
+               delimiter='\t', newline='\n', header=header)
     
     print('Archivo guardado en {}'.format(file))
     
@@ -256,7 +261,7 @@ def savewav(datapyaudio,
         Data's PyAudio format.
     overwrite=False : bool
         Indicates wheter to overwrite or not.
-    
+        
     Returns
     -------
     nothing
