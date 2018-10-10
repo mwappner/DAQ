@@ -213,7 +213,7 @@ def savetext(datanumpylike, file, overwrite=False, header=''):
         os.makedirs(base)
     
     if header != '':
-        header = '# ' + '\t'.join(header) + '\n'
+        header = '\t'.join(header)
 
     file = os.path.join(
             base,
