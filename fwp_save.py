@@ -304,3 +304,64 @@ def savewav(datapyaudio,
     print('Archivo guardado en {}'.format(file))
     
     return
+
+#%%
+
+def saveanimation(animation,
+                  file,
+                  frames_per_second=30,
+                  overwrite=False):
+    
+    """Saves a matplotlib.animation object as '.gif' or '.mp4'.
+    
+    Variables
+    ---------
+    animation : matplotlib.animation object
+        Animation to save.
+    file : str
+        Desired file (must include full path and extension).
+    frames_per_second=30 : int
+        Animation's frames per second.
+    overwrite=False : bool
+        Indicates wheter to overwrite or not.
+        
+    Returns
+    -------
+    nothing
+    
+    Yields
+    ------
+    video file
+    
+    Warnings
+    --------
+    To save '.gif' you must have ImageMagick installed.
+    To save '.mp4' you must have FFPG installed.
+    
+    See Also
+    --------
+    free_file()
+    fwp_plot.animation_2D()
+    
+    """
+    
+    if not os.path.isdir(os.path.split(file)[0]):
+        os.makedirs(os.path.split(file)[0])
+    
+    if not overwrite:
+        file = free_file(file)
+    
+    extension = os.path.splitext(file)
+    
+    if extension == '.mp4':
+        animation.save(file,
+                       fps=frames_per_second, 
+                       extra_args=['-vcodec', 'libx264'])
+    elif extension == '.gif':
+        animation.save(file,
+                       dpi=80,
+                       writer='imagemagick')    
+    
+    print('Archivo guardado en {}'.format(file))
+    
+    return

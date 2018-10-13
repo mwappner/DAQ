@@ -105,7 +105,7 @@ folder = sav.new_dir(folder)
 filename = lambda samplerate : os.path.join(
         folder, 
         '{:.0f}_Hz.txt'.format(samplerate))
-header = 'time [s]  data [V]'
+header = 'Time [s]\tData [V]'
 
 # ACTUAL CODE
                

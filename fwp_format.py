@@ -179,46 +179,6 @@ def error_value(X, dX, error_digits=2, units='',
 
 #%%
 
-def plot_text(text, text_position='up', figure_id=None):
-    """Prints some text on a matplotlib.pyplot figure.
-    
-    Parameters
-    ----------
-    text : str
-        Text to be printed.
-    text_position : tuple, str {'up', 'dowm'}
-        Position of the text to be printed.
-    figure_id=None : int
-        ID of the figure where the text will be printed.
-        If none is given, the current figure is taken as default.
-    
-    Returns
-    -------
-    nothing
-    
-    See Also
-    --------
-    plot_style
-    matplotlib.pyplot.gcf
-    
-    """
-
-    if figure_id is None:
-        plt.gcf()
-    else:
-        plt.figure(figure_id)
-    
-    if text_position == 'up':
-        plt.annotate(text, (0.02,0.9), xycoords="axes fraction")
-    elif text_position == 'down':
-        plt.annotate(text, (0.02,0.05), xycoords="axes fraction")
-    else:
-        plt.annotate(text, text_position, xycords="axes fraction")
-    
-    plt.show()
-
-#%%
-
 def plot_style(figure_id=None, **kwargs):
     """Gives a specific style to figure.
     
