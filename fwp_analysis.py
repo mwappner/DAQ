@@ -45,6 +45,35 @@ def rms(data):
 
 #%%
 
+def main_frequency(data, samplerate=44100):
+    """Returns main frequency and its Fourier amplitude.
+    
+    Parameters
+    ----------
+    data : np.array
+        Data inside a 1D array.
+    samplerate : int, float
+        The data's sampling rate.
+    
+    Returns
+    -------
+    samplerate : int, float
+        The data's sampling rate.
+    main_frequency : float
+        The data's main frequency.
+    fourier_peak : float
+        The main frequency's fourier amplitude.
+    """
+    
+    fourier = np.abs(np.fft.rfft(data))
+    fourier_frequencies = np.fft.rfftfreq(len(data), d=1./samplerate)
+    max_frequency = fourier_frequencies[np.argmax(fourier)]
+    fourier_peak = max(fourier)
+    
+    return max_frequency, fourier_peak
+
+#%%
+
 def mean(X, dX=None):
     """Returns average or weighted average and standard deviation.
     

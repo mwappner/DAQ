@@ -5,39 +5,13 @@ This script is to make measurements with a National Instruments DAQ.
 @author: GrupoFWP
 """
 
+import fwp_analysis as anly
+import fwp_lab_instruments as ins
+import fwp_save as sav
+import matplotlib.pyplot as plt
+import os
 import nidaqmx as nid
 import numpy as np
-import matplotlib.pyplot as plt
-import fwp_save as sav
-import os
-import fwp_lab_instruments as ins
-
-def main_frequency(data, samplerate):
-    """Returns main frequency and its Fourier amplitude.
-    
-    Parameters
-    ----------
-    data : np.array
-        Data inside a 1D array.
-    samplerate : int, float
-        The data's sampling rate.
-    
-    Returns
-    -------
-    samplerate : int, float
-        The data's sampling rate.
-    main_frequency : float
-        The data's main frequency.
-    fourier_peak : float
-        The main frequency's fourier amplitude.
-    """
-    
-    fourier = np.abs(np.fft.rfft(data))
-    fourier_frequencies = np.fft.rfftfreq(len(data), d=1./sr)
-    max_frequency = fourier_frequencies[np.argmax(fourier)]
-    fourier_peak = max(fourier)
-    
-    return samplerate, max_frequency, fourier_peak
 
 #%% Only_One_Measure
 """
@@ -158,7 +132,8 @@ with nid.Task() as task:
         np.savetxt(filename(sr), np.array([time, signal]).T, 
                    header=header)
         
-        fourier_data.append(main_frequency(signal, sr))
+        max_frequency, fourier_peak = anly.main_frequency(signal, sr)
+        fourier_data.append((sr, max_frequency, fourier_peak))
 
 sav.savetext(np.array(fourier_data), os.path.join(folder, 'Data.txt'), 
              header=['Sampling rate (Hz)', 
@@ -211,9 +186,10 @@ header_fourier = ['Sampling rate (Hz)',
                   'Intensity (u.a.)']
 
 # ACTIVE CODE
-fourier_data = [] # contains sampling rate, main frequency and its power
+
 with nid.Task() as task:
     
+    # Configure channel
     task.ai_channels.add_ai_voltage_chan(
             "Dev20/ai1",
             terminal_config=mode)
@@ -221,37 +197,47 @@ with nid.Task() as task:
     for sr in samplerate:
         print('Doing SR {} Hz'.format(sr))
         
+        # Make frequency array for a given samplerate
         signal_frequency_min = sr/10
         signal_frequency_max = 5*sr
         signal_frequency = np.linspace(signal_frequency_min,
                                        signal_frequency_max,
                                        signal_frequency_n)
         
+        # Configure clock and measurement
         duration = 10/signal_frequency_min
         samples_to_meassure = int(sr * duration)
         task.timing.cfg_samp_clk_timing(
                 rate=sr,
                 samps_per_chan=samples_to_meassure)
-        
+
+        fourier_data = []
         for freq in signal_frequency:
             
+            # Reconfigure function generator
             gen.output(True, channel=1, print_changes=False,
                        frequency=freq, amplitude=2)
 
+            # Measure with DAQ
             signal = task.read(
                     number_of_samples_per_channel=samples_to_meassure)
             task.wait_until_done()
 
+            # Save measurement
             time = np.linspace(0, duration, samples_to_meassure)
             np.savetxt(filename(sr), np.array([time, signal]).T, 
                        header=header)
             
-            fourier_data.append(main_frequency(signal, sr))
+            # Get main frequency and Fourier amplitude
+            max_freq, fourier_peak = anly.main_frequency(signal, sr)
+            fourier_data.append((sr, max_freq, fourier_peak))
 
+        # Save samplerate, main frequency and Fourier amplitude
         sav.savetext(np.array(fourier_data), 
                      os.path.join(folder, 
                                   filename_fourier), 
                      header=header_fourier)
+
 gen.gen.close()
 
 #%% Moni_Freq
