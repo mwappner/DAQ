@@ -6,6 +6,8 @@ Some of its most useful tools are:
 
 value_error : function
     Rounds up value and error of a measure. Also makes a latex string.
+find_numbers : function
+    Returns a list of numbers found on a given string.
 
 @author: Vall
 """
@@ -177,7 +179,7 @@ def error_value(X, dX, error_digits=2, units='',
 #%%
 
 def find_numbers(string):
-    """Returns a list of numbers as string found on a given string
+    """Returns a list of numbers found on a given string
     
     Parameters
     ----------
@@ -187,7 +189,7 @@ def find_numbers(string):
     Returns
     -------
     list
-        A list of strings that contain numbers.
+        A list of numbers (each an int or float).
     
     Raises
     ------
@@ -198,8 +200,14 @@ def find_numbers(string):
     
     numbers = re.findall(r"[-+]?\d*\.\d+|[-+]?\d+", string)
     
-    if not numbers[0]:
+    if not numbers:
         raise TypeError("There's no number in this string")
+    
+    for i, n in enumerate(numbers):
+        if '.' in n:
+            numbers[i] = float(n)
+        else:
+            numbers[i] = int(n) 
     
     return numbers
 
@@ -224,7 +232,5 @@ def find_1st_number(string):
     """
     
     number = find_numbers(string)[0]
-    if '.' in number:
-        return float(number)
-    else:
-        return int(number)
+    
+    return number
