@@ -178,6 +178,23 @@ def error_value(X, dX, error_digits=2, units='',
 
 #%%
 
+def resistance(value, porcentual_error, extra_digits, min_division, 
+               error_digits=2, units=r'$\Omega$', number_return=False):
+        
+    error = porcentual_error * value / 100
+    error = error + extra_digits * min_division
+    
+    latex = error_value(value, error,
+                        error_digits=error_digits,
+                        units=units, string_scale=True)
+    
+    if number_return:
+        return value, error
+    else:
+        return latex
+
+#%%
+
 def find_numbers(string):
     """Returns a list of numbers found on a given string
     
@@ -234,3 +251,43 @@ def find_1st_number(string):
     number = find_numbers(string)[0]
     
     return number
+
+#%%
+
+def counting_sufix(number):
+    """Returns a number's suffix string to use for counting.
+    
+    Parameters
+    ----------
+    number: int, float
+        Any number, though it is designed to work with integers.
+    
+    Returns
+    -------
+    ans: str
+        A string representing the integer number plus a suffix.
+    
+    Examples
+    --------
+    >> counting_sufix(1)
+    '1st'
+    >> counting_sufix(22)
+    '22nd'
+    >> counting_sufix(1.56)
+    '2nd'
+    
+    """
+    
+    number = round(number)
+    unit = int(str(number)[-1])
+    
+    if unit == 1:
+        ans = 'st'
+    if unit == 2:
+        ans = 'nd'
+    if unit == 3:
+        ans = 'rd'
+    else:
+        ans = 'th'
+    
+    return ans

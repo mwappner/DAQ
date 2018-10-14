@@ -511,3 +511,109 @@ def smooth(X, window_len=11, window='hanning'):
     Y = np.convolve(W/W.sum(), S, mode='valid')
     
     return Y
+
+#%%
+
+def find(L, L0):
+    """Takes an array of data and searches the index(es) of value L0.
+    
+    Parameters
+    ----------
+    L : list, np.array
+        Array where I search
+    L0 : int, float
+        Value I search
+    
+    Returns
+    -------
+    ind : list
+        Indexes of L that match L0.
+    
+    Raises
+    ------
+    "L must be a list or similar" : TypeError
+        If L is not of an allowed type.
+    
+    """
+
+    if not isinstance(L, list):
+        try:
+            L = list(L)
+        except TypeError:
+            L = [].append(L)
+        else:
+            return TypeError("L must be a list or similar")
+            
+    ind = []
+    N = -1
+    while N < len(L):
+        val = L[N+1 : len(L)]
+        try:
+            # Write the index on L and not on val
+            N = val.index(L0) + len(L) - len(val)
+        except ValueError:
+            break
+        ind.append(N)
+        
+    return ind
+
+#%%
+
+def compare_error_value(X1, dX1, X2, dX2):
+    """Comparison of two measuremntes X1+-dX1 and X2+-dX2.
+    
+    Parameters
+    ----------
+    X1 : int, float
+        First value.
+    dX1 : int, float.
+        First value's error.
+    X2 : int, float
+        Second value.
+    dX2 : int, float
+        Second value's error.
+    
+    Returns
+    -------
+    string : str
+        Written answer.
+        
+    """
+    
+    from numpy import array
+        
+    A1 = (X1-dX1, X1+dX1)
+    A2 = (X2-dX2, X2+dX2)
+    
+    answer = array([0,0])
+    if A2[0] <= X1[0] <= A2[1]:
+        answer[0] = answer[0]+1
+    if A1[0]<=X2[0]<=A1[1]:
+        answer[0] = answer[0]+1
+    if A1[0]<=A2[0]<=A1[1]:
+        answer[1] = answer[1]+1
+    if A2[0]<=A1[0]<=A2[1]:
+        answer[1] = answer[1]+1
+    if A1[0]<=A2[1]<=A1[1]:
+        answer[1] = answer[1]+1
+    if A2[0]<=A1[1]<=A2[1]:
+        answer[1] = answer[1]+1    
+        
+    if X1 == X2:
+        string = "Coincidencia absoluta "
+    elif answer[0] == 0:
+        string = "No coincidencia "
+    elif answer[0] == 1:
+        string = "Coincidencia parcial "
+    else:
+        string = "Coincidencia total "
+    if answer[1] < 2:
+        string = string + "sin intersección de incertezas"
+    elif answer[1] == 2:
+        string = string + "con intersección parcial de incertezas"
+    elif answer[1] == 3:
+        string = string + "con intersección total de incertezas"
+    else:
+        string = string + "con intersección absoluta de incertezas"
+        
+    return string
