@@ -17,6 +17,8 @@ savetext : function
     Saves some np.array like data on a '.txt' file.
 savewav : function
     Saves a PyAudio encoded audio on a '.wav' file.
+saveanimation : function
+    Saves a matplotlib.animation object as '.gif' or '.mp4'.
 
 @author: Vall
 @date: 09-17-2018
