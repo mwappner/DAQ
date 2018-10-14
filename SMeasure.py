@@ -143,10 +143,10 @@ sav.savetext(np.array(fourier_data), os.path.join(folder, 'Data.txt'),
 #%% Frequency_Sweep
 """This script makes a double sweep on frequency and samplerate.
 
-For each frequency, it sweeps on samplerate. It saves all measurements. 
+For each samplerate, it sweeps on frequency. It saves all measurements. 
 It also applies Fourier Transformation to get main frequency and its 
-Fourier amplitude. For each frequency, it saves main frequency and 
-Fourier amplitude along with samplerate.
+Fourier amplitude. For each samplerate, it saves main frequency and 
+Fourier amplitude.
 """
 
 # PARAMETERS
