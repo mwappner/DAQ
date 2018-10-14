@@ -1,19 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-This module formats plots and values for Latex.
+This module contains tools for dealing with strings.
 
 Some of its most useful tools are:
 
 value_error : function
     Rounds up value and error of a measure. Also makes a latex string.
-plot_style : function
-    Gives a specific style to figure.
+find_numbers : function
+    Returns a list of numbers found on a given string.
 
 @author: Vall
 """
 
-from matplotlib import rcParams, ticker
-import matplotlib.pyplot as plt
+import re
 from tkinter import Tk
 
 #%%
@@ -179,117 +178,116 @@ def error_value(X, dX, error_digits=2, units='',
 
 #%%
 
-def plot_text(text, text_position='up', figure_id=None):
-    """Prints some text on a matplotlib.pyplot figure.
+def resistance(value, porcentual_error, extra_digits, min_division, 
+               error_digits=2, units=r'$\Omega$', number_return=False):
+        
+    error = porcentual_error * value / 100
+    error = error + extra_digits * min_division
     
-    Parameters
-    ----------
-    text : str
-        Text to be printed.
-    text_position : tuple, str {'up', 'dowm'}
-        Position of the text to be printed.
-    figure_id=None : int
-        ID of the figure where the text will be printed.
-        If none is given, the current figure is taken as default.
+    latex = error_value(value, error,
+                        error_digits=error_digits,
+                        units=units, string_scale=True)
     
-    Returns
-    -------
-    nothing
-    
-    See Also
-    --------
-    plot_style
-    matplotlib.pyplot.gcf
-    
-    """
-
-    if figure_id is None:
-        plt.gcf()
+    if number_return:
+        return value, error
     else:
-        plt.figure(figure_id)
-    
-    if text_position == 'up':
-        plt.annotate(text, (0.02,0.9), xycoords="axes fraction")
-    elif text_position == 'down':
-        plt.annotate(text, (0.02,0.05), xycoords="axes fraction")
-    else:
-        plt.annotate(text, text_position, xycords="axes fraction")
-    
-    plt.show()
+        return latex
 
 #%%
 
-def plot_style(figure_id=None, **kwargs):
-    """Gives a specific style to figure.
-    
-    This function...
-        ...increases font size;
-        ...increases linewidth;
-        ...increases markersize;
-        ...gives format to axis ticks if specified;
-        ...stablishes new figure dimensions if specified;
-        ...activates grid.
+def find_numbers(string):
+    """Returns a list of numbers found on a given string
     
     Parameters
     ----------
-    figure_id : int, optional.
-        ID of the figure where the text will be printed.
-        If none is given, the current figure is taken as default.
+    string: str
+        The string where you search.
     
-    Other Parameters
-    ----------------
-    xaxisformat : format-like str, optional.
-        Used to update x axis ticks format; i.e.: '%.2e'
-    yaxisformat : format-like str, optional.
-        Used to update y axis ticks format; i.e.: '%.2e'
-    dimensions: list with length 4, optional.
-        Used to update plot dimensions: [xmin, xmax, ymin, ymax]. Each 
-        one should be a number expressed as a fraction of current 
-        dimensions.
+    Returns
+    -------
+    list
+        A list of numbers (each an int or float).
     
-    See Also
+    Raises
+    ------
+    "There's no number in this string" : TypeError
+        If no number is found.
+
+    """
+    
+    numbers = re.findall(r"[-+]?\d*\.\d+|[-+]?\d+", string)
+    
+    if not numbers:
+        raise TypeError("There's no number in this string")
+    
+    for i, n in enumerate(numbers):
+        if '.' in n:
+            numbers[i] = float(n)
+        else:
+            numbers[i] = int(n) 
+    
+    return numbers
+
+def find_1st_number(string):
+    """Returns the first float or int number of a string
+    
+    Parameters
+    ----------
+    string: str
+        The string where you search.
+    
+    Returns
+    -------
+    number: int, float
+        The number you found.
+    
+    Raises
+    ------
+    "There's no number in this string" : TypeError
+        If no number is found.
+
+    """
+    
+    number = find_numbers(string)[0]
+    
+    return number
+
+#%%
+
+def counting_sufix(number):
+    """Returns a number's suffix string to use for counting.
+    
+    Parameters
+    ----------
+    number: int, float
+        Any number, though it is designed to work with integers.
+    
+    Returns
+    -------
+    ans: str
+        A string representing the integer number plus a suffix.
+    
+    Examples
     --------
-    matplotlib.pyplot.axis
-    matplotlib.pyplot.gcf
+    >> counting_sufix(1)
+    '1st'
+    >> counting_sufix(22)
+    '22nd'
+    >> counting_sufix(1.56)
+    '2nd'
     
     """
     
-    if figure_id is None:
-        fig = plt.gcf()
+    number = round(number)
+    unit = int(str(number)[-1])
+    
+    if unit == 1:
+        ans = 'st'
+    if unit == 2:
+        ans = 'nd'
+    if unit == 3:
+        ans = 'rd'
     else:
-        fig = plt.figure(figure_id)
-    ax = fig.axes
+        ans = 'th'
     
-    rcParams.update({'font.size': 14})
-    rcParams.update({'lines.linewidth': 3})
-    rcParams.update({'lines.markersize': 6})
-    
-    kwargs_list = ['xaxisformat', 'yaxisformat', 'dimensions']
-    for key in kwargs_list:
-        try:
-            kwargs[key]
-        except KeyError:
-            kwargs[key] = None
-    
-    if kwargs['xaxisformat'] is not None:
-        for a in ax:
-            a.xaxis.set_major_formatter(ticker.FormatStrFormatter(
-                kwargs['xaxisformat']))
-        
-    if kwargs['yaxisformat'] is not None:
-        for a in ax:
-            a.yaxis.set_major_formatter(ticker.FormatStrFormatter(
-                kwargs['yaxisformat']))
-    
-    if kwargs['dimensions'] is not None:
-        for a in ax:
-            box = a.get_position()
-            a.set_position([kwargs['dimensions'][0]*box.x0,
-                            kwargs['dimensions'][1]*box.y0,
-                            kwargs['dimensions'][2]*box.width,
-                            kwargs['dimensions'][3]*box.height])
-    
-    for a in ax:
-        a.grid()
-    
-    plt.show()
+    return ans
