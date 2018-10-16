@@ -16,7 +16,7 @@ smooth : function
 @author: Vall
 """
 
-import fwp_format as fmt
+import fwp_string as fst
 import matplotlib.pyplot as plt
 from math import sqrt
 import numpy as np
@@ -247,7 +247,7 @@ def linear_fit(X, Y, dY=None, showplot=True,
                 fact = -.08
             vertical = [kwargs['text_position'][1]+fact*i for i in range(3)]
         
-        plt.annotate('m = {}'.format(fmt.error_value(
+        plt.annotate('m = {}'.format(fst.error_value(
                         m, 
                         dm,
                         error_digits=kwargs['mb_error_digits'][0],
@@ -257,7 +257,7 @@ def linear_fit(X, Y, dY=None, showplot=True,
                         legend=True)),
                     (kwargs['text_position'][0], vertical[0]),
                     xycoords='axes fraction')
-        plt.annotate('b = {}'.format(fmt.error_value(
+        plt.annotate('b = {}'.format(fst.error_value(
                         b, 
                         db,
                         error_digits=kwargs['mb_error_digits'][1],
@@ -414,7 +414,7 @@ def nonlinear_fit(X, Y, fitfunction, initial_guess=None, dY=None,
             plt.annotate(
                     'a{} = {}'.format(
                         i,
-                        fmt.error_value(
+                        fst.error_value(
                             parameters[i], 
                             sqrt(covariance[i,i]),
                             error_digits=kwargs['par_error_digits'][i],
@@ -617,3 +617,43 @@ def compare_error_value(X1, dX1, X2, dX2):
         string = string + "con intersección absoluta de incertezas"
         
     return string
+
+#%%
+
+def single_extreme(X, mode='min'):    
+    """Returns an absolute extreme of a multidimensional array.
+    
+    Parameters
+    ----------
+    X : list, array
+        Multidimensional array-like of numbers.
+    mode : str {'min', 'max'}
+        Indicates which extreme to find (if a minimum or maximum).
+    
+    Returns
+    -------
+    float, int
+        Value of the extreme.
+    
+    """
+    
+    if mode not in ['min', 'max']:
+        raise ValueError("mode must be 'min' or 'max'")
+    
+    if mode == 'min':
+        while True:
+            try:
+                X = list(X)
+                X[0]
+                X = min(X[i] for i in range(len(X)))
+            except:
+                return X
+
+    else:
+        while True:
+            try:
+                X = list(X)
+                X[0]
+                X = max(X[i] for i in range(len(X)))
+            except:
+                return X
