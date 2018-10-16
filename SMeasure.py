@@ -82,7 +82,7 @@ saves main frequency and its Fourier amplitude along with samplig rate.
 # PARAMETERS
 
 # Main parameters
-periods_to_meassure = 100
+periods_to_measure = 100
 signal_frequency = 1.2e3
 
 samplerate_min = 100
@@ -96,7 +96,7 @@ name = 'Samplerate_Sweep'
 samplerate = np.linspace(samplerate_min,
                          samplerate_max,
                          samplerate_n)
-duration = periods_to_meassure / signal_frequency
+duration = periods_to_measure / signal_frequency
 
 folder = os.path.join(os.getcwd(),
                       'Measurements',
@@ -119,23 +119,24 @@ with nid.Task() as task:
     for sr in samplerate:
         print('Doing {}Hz'.format(sr))
         
-        samples_to_meassure = int(sr * duration)
+        samples_to_measure = int(sr * duration)
         task.timing.cfg_samp_clk_timing(
                 rate=sr,
-                samps_per_chan=samples_to_meassure)
+                samps_per_chan=samples_to_measure)
         
         signal = task.read(
-                number_of_samples_per_channel=samples_to_meassure)
+                number_of_samples_per_channel=samples_to_measure)
         task.wait_until_done()
         
-        time = np.linspace(0, duration, samples_to_meassure)
+        time = np.linspace(0, duration, samples_to_measure)
         np.savetxt(filename(sr), np.array([time, signal]).T, 
                    header=header)
         
         max_frequency, fourier_peak = anly.main_frequency(signal, sr)
         fourier_data.append((sr, max_frequency, fourier_peak))
 
-sav.savetext(np.array(fourier_data), os.path.join(folder, 'Data.txt'), 
+sav.savetext(os.path.join(folder, 'Data.txt'), 
+             np.array(fourier_data),
              header=['Sampling rate (Hz)', 
                      'Main frequency (Hz)',
                      'Intensity'])
@@ -206,10 +207,10 @@ with nid.Task() as task:
         
         # Configure clock and measurement
         duration = 10/signal_frequency_min
-        samples_to_meassure = int(sr * duration)
+        samples_to_measure = int(sr * duration)
         task.timing.cfg_samp_clk_timing(
                 rate=sr,
-                samps_per_chan=samples_to_meassure)
+                samps_per_chan=samples_to_measure)
 
         fourier_data = []
         for freq in signal_frequency:
@@ -220,25 +221,204 @@ with nid.Task() as task:
 
             # Measure with DAQ
             signal = task.read(
-                    number_of_samples_per_channel=samples_to_meassure)
+                    number_of_samples_per_channel=samples_to_measure)
             task.wait_until_done()
 
             # Save measurement
-            time = np.linspace(0, duration, samples_to_meassure)
-            np.savetxt(filename(sr), np.array([time, signal]).T, 
-                       header=header)
+            time = np.linspace(0, duration, samples_to_measure)
+            sav.savetext(filename(sr),
+                         np.array([time, signal]).T,
+                         header=header)
             
             # Get main frequency and Fourier amplitude
             max_freq, fourier_peak = anly.main_frequency(signal, sr)
             fourier_data.append((sr, max_freq, fourier_peak))
 
         # Save samplerate, main frequency and Fourier amplitude
-        sav.savetext(np.array(fourier_data), 
-                     os.path.join(folder, 
-                                  filename_fourier), 
+        sav.savetext(os.path.join(folder, 
+                                  filename_fourier),
+                     np.array(fourier_data), 
                      header=header_fourier)
+gen.output(False)
 
 gen.gen.close()
+
+#%% Settling_Time
+"""This script is designed to measure settling time for fixed conditions.
+
+It generates a low-frequency square wave. And this wave is measured at 
+maximum samplerate in order to watch the time it takes for the NI DAQ 
+to fixe to minimum and maximum voltage. This script saves time and 
+voltage.
+
+Warnings
+--------
+Must first check I can generate a fwp_lab_instruments square wave.
+>>> gen.output(True, waveform='square')
+Should also check I can change duty cycle.
+>>> gen.output(True, waveform='square75')
+Could also ask what voltage the DAQ is used to measure:
+>>> with nid.Task() as task:
+>>>     task.ai_channels.add_ai_voltage_chan(
+>>>             "Dev20/ai1",
+>>>             terminal_config=mode)
+>>>     print("Vmax = ", task.ai_channels.ai_voltage_chan.ai_max)
+>>>     print("Vmin = ", task.ai_channels.ai_voltage_chan.ai_min)
+"""
+
+# PARAMETERS
+
+# Main parameters
+samplerate = 400e3
+mode = nid.constants.TerminalConfiguration.NRSE
+
+signal_frequency = 10#500
+periods_to_measure = 50
+gen_port = 'ASRL1::INSTR'
+gen_totalchannels = 2
+
+name = 'Settling_Time'
+
+# Other parameters
+duration = periods_to_measure/signal_frequency
+samples_to_measure = int(samplerate * duration)
+
+gen = ins.Gen(port=gen_port, nchannels=gen_totalchannels)
+
+folder = os.path.join(os.getcwd(),
+                      'Measurements',
+                      name)
+folder = sav.new_dir(folder)
+header = ['Time [s]', 'Data [V]']
+
+# ACTIVE CODE
+
+gen.output(True, waveform='square', 
+           frequency=signal_frequency,
+           amplitude=2)
+with nid.Task() as task:
+    
+    # Configure channel
+    task.ai_channels.add_ai_voltage_chan(
+            "Dev20/ai1",
+            terminal_config=mode)
+    
+    task.timing.cfg_samp_clk_timing(
+            rate=sr,
+            samps_per_chan=samples_to_measure)
+
+    signal = task.read(
+            number_of_samples_per_channel=samples_to_measure)
+    task.wait_until_done()
+gen.output(False)
+
+# Save measurement
+time = np.linspace(0, duration, samples_to_measure)
+sav.savetext(filename(sr),
+             np.array([time, signal]).T,
+             header=header)
+
+gen.gen.close()
+
+#%% Multichannel_Settling_Time
+"""This script is designed to measure multichannel settling time.
+
+It generates a low-frequency ramp wave (sawtooth like). And this wave is 
+measured at maximum samplerate in order to watch the time it takes for 
+the NI DAQ to fix to another channel.
+
+This is repeated on a sweep for different number of channels. For each 
+of them, it saves time and voltage.
+
+Warnings
+--------
+Must first check I can generate a ramp with fwp_lab_instruments.
+>>> gen.output(True, 'ramp')
+Should also check I can change ramp simmetry.
+>>> gen.output(True, 'ramp100')
+Is 100% always positive slope or always negative slope?
+"""
+
+# PARAMETERS
+
+# Main parameters
+samplerate = 400e3
+mode = nid.constants.TerminalConfiguration.NRSE
+
+signal_frequency = 10
+signal_pk_amplitude = 2
+periods_to_measure = 50
+gen_port = 'ASRL1::INSTR'
+gen_totalchannels = 2
+
+name = 'Multichannel_Settling_Time'
+
+# Other parameters
+duration = periods_to_measure/signal_frequency
+samples_to_measure = int(samplerate * duration)
+channels = ["Dev20/ai0",
+            "Dev20/ai1",
+            "Dev20/ai2",
+            "Dev20/ai3",
+            "Dev20/ai4",
+            "Dev20/ai5",
+            "Dev20/ai6",
+            "Dev20/ai7"]
+
+gen = ins.Gen(port=gen_port, nchannels=gen_totalchannels)
+signal_slope = signal_pk_amplitude * signal_frequency
+
+folder = os.path.join(os.getcwd(),
+                      'Measurements',
+                      name)
+folder = sav.new_dir(folder)
+filename = lambda nchannels : os.path.join(
+        folder, 
+        'NChannels_{}.txt'.format(nchannels))
+header = 'Time [s]\tData [V]'
+
+# ACTIVE CODE
+
+gen.output(True, waveform='ramp100', 
+           frequency=signal_frequency,
+           amplitude=2)
+with nid.Task() as task:
+
+    task.timing.cfg_samp_clk_timing(
+            rate=sr,
+            samps_per_chan=samples_to_measure)
+    
+    for nchannels, channel in enumerate(channels):
+        
+        # Configure channel
+        task.ai_channels.add_ai_voltage_chan(
+                channel,
+                terminal_config=mode)
+#                ai_max=2,
+#                ai_min=-2)
+
+        # Measure
+        signal = task.read(
+                number_of_samples_per_channel=samples_to_measure)
+        task.wait_until_done()
+        
+        # Save measurement
+        nchannels = nchannels + 1
+        print("For {} channels, signal has size {}".format(
+                nchannels,
+                np.size(signal)))
+        time = np.linspace(0, duration, samples_to_measure)
+        try:
+            data = np.zeros((signal[:,0], signal[0,:]+1))
+            data[:,0] = time
+            data[:,1:] = signal
+        except IndexError:
+            data = np.array([time, signal]).T
+        np.savetxt(filename(nchannels), data, header=header)
+
+gen.output(False)
+gen.gen.close()
+
 
 #%% Moni_Freq
 
