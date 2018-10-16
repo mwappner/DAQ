@@ -14,6 +14,7 @@ add_style : function
 @author: Vall
 """
 
+from fwp_analysis import single_extreme
 from matplotlib import rcParams, ticker, animation
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.cm import winter, summer, spring, autumn, cool, hot
@@ -174,11 +175,25 @@ def add_style(figure_id=None, new_figure=False, **kwargs):
     except IndexError:
         ax = [plt.axes()]
     
-    rcParams.update({'font.size': 14})
-    rcParams.update({'lines.linewidth': 3})
-    rcParams.update({'lines.markersize': 6})
+    kwargs_list = ['fontsize', 'linewidth', 'markersize', 'dimensions']
+    kwargs_val = [14, 3, 6, [1.15,1.05,1,1]]
+    for key, val in zip(kwargs_list, kwargs_val):
+        try:
+            kwargs[key]
+        except KeyError:
+            kwargs[key] = val
     
-    kwargs_list = ['xaxisformat', 'yaxisformat', 'dimensions']
+    rcParams.update({'font.size': kwargs['fontsize']})
+    rcParams.update({'lines.linewidth': kwargs['linewidth']})
+    rcParams.update({'lines.markersize': kwargs['markersize']})
+    for a in ax:
+        box = a.get_position()
+        a.set_position([kwargs['dimensions'][0]*box.x0,
+                        kwargs['dimensions'][1]*box.y0,
+                        kwargs['dimensions'][2]*box.width,
+                        kwargs['dimensions'][3]*box.height])
+    
+    kwargs_list = ['xaxisformat', 'yaxisformat']
     for key in kwargs_list:
         try:
             kwargs[key]
@@ -194,15 +209,7 @@ def add_style(figure_id=None, new_figure=False, **kwargs):
         for a in ax:
             a.yaxis.set_major_formatter(ticker.FormatStrFormatter(
                 kwargs['yaxisformat']))
-    
-    if kwargs['dimensions'] is not None:
-        for a in ax:
-            box = a.get_position()
-            a.set_position([kwargs['dimensions'][0]*box.x0,
-                            kwargs['dimensions'][1]*box.y0,
-                            kwargs['dimensions'][2]*box.width,
-                            kwargs['dimensions'][3]*box.height])
-    
+        
     for a in ax:
         a.grid()
     
@@ -485,20 +492,20 @@ def graphs_3D(X, Y, Z, Z2, X2=None, Y2=None,
 #%%
 
 def animation_2D(X, Y, figure_id=None, new_figure=True, 
-                 frames_number=30,
+                 frames_number=30, fps=5,
                  label_function=lambda i : '{:.0f}'.format(i)):
     """Makes a series of 2D plots into an animation.
     
     Parameters
     ----------
-    X : np.array
+    X : np.array, list
         Data's X values. Can be a 1D array of len X_len or a 2D array of 
         size (n, X_len), where each column corresponds to a different 
-        data series.
-    Y : np.array
-        Data's X values. Can be a 1D array of len Y_len or a 2D array of 
-        size (n, Y_len), where each column corresponds to a different 
-        data series.
+        data series. Can also be a list of 1D arrays.
+    Y : np.array, list
+        Data's X values. Should be a 2D array of size (n, Y_len), where 
+        each column corresponds to a different data series. Can also be 
+        a list of 1D arrays.
     figure_id=None : int, optional
         A matplotlib.pyplot.figure's ID. If specified, it plots on that 
         figure, which can be already formatted with axis labels, i.e.
@@ -506,7 +513,9 @@ def animation_2D(X, Y, figure_id=None, new_figure=True,
         Indicates whether to make a new figure or not when 
         figure_id=None.
     frames_number=30 : int, optional
-        Animation's number of frames.
+        Animation's total number of frames.
+    fps=30 : int, optional
+        Animation's number of frames per second.
     label_function : function, optional.
         Function that assigns frames' labels. Must take in one int 
         parameter and return one string.
@@ -520,9 +529,9 @@ def animation_2D(X, Y, figure_id=None, new_figure=True,
     ------
     "Y should be a 2D array" : TypeError
         If Y doesn't have more than 1 column.
-    "X, Y should have the same number of columns" : IndexError
+    "X, Y should have same number of columns" : IndexError
         If X is not 1D and X, Y don't have the same number of columns.
-    "X, Y should have the same number of rows" : IndexError
+    "X, Y should have same number of rows" : IndexError
         If X, Y don't have the same number of rows.
     
     See Also
@@ -532,24 +541,52 @@ def animation_2D(X, Y, figure_id=None, new_figure=True,
     
     """
     
-    try:
-        Y_rows = len(Y[:,0])
-        Y_cols = len(Y[0,:])
-    except:
-        raise TypeError("Y should be a 2D array")
+    # WARNINGS AND VARIABLES' TYPES
     
-    try:
-        X_rows = len(X[:,0])
-        X_cols = len(X[0,:])
-    except:
-        X_rows = len(X)
-        X_cols = 1
+    if isinstance(Y, np.ndarray):
         
-    if X_cols != 1 and X_cols != Y_cols:
-        raise IndexError("X, Y should have the same number of columns")
+        try:
+            Y_rows = len(Y[:,0])
+            Y_cols = len(Y[0,:])
+        except:
+            raise TypeError("Y should be a 2D array")
+        call_Y_series = lambda i : Y[:,i]
+        frames_total = len(Y[0,:])
+            
+        if not isinstance(X, np.ndarray):
+            X = np.array(X).T
+        try:
+            X_rows = len(X[:,0])
+            X_cols = len(X[0,:])
+            call_X_series = lambda i : X[:,i]
+        except:
+            X_rows = len(X)
+            X_cols = 1
+            call_X_series = lambda i : X
+        
+        if X_cols != 1 and X_cols != Y_cols:
+            raise IndexError("X, Y should have same number of columns")
+        
+        if X_rows != Y_rows:
+            raise IndexError("X, Y should have same number of rows")
     
-    if X_rows != Y_rows:
-        raise IndexError("X, Y should have the same number of rows")
+    else:
+
+        try:
+            Y[0][0]
+            call_Y_series = lambda i : Y[i]
+            frames_total = len(Y)
+        except:
+            raise TypeError("Y should be a 2D list")
+        
+        X = list(X)
+        try:
+            X[0][0]
+            call_X_series = lambda i : X[i]
+        except:
+            call_X_series = lambda i : X
+    
+    # ACTIVE CODE
     
     if figure_id is not None:
         fig = plt.figure(figure_id)
@@ -560,36 +597,33 @@ def animation_2D(X, Y, figure_id=None, new_figure=True,
 
     try:
         ax = fig.axes
-        ax[0]
+        ax = ax[0]
     except IndexError:
         ax = [plt.axes()]
     
-    ax = plt.axes(xlim=(np.amin(X),np.amax(X)), 
-                  ylim=(np.amin(Y),np.amax(Y)))
+    ax.set_xlim((single_extreme(X), single_extreme(X, 'max')))
+    ax.set_ylim((single_extreme(Y), single_extreme(Y, 'max')))
     line, = ax.plot([], [])
     label = ax.text(0.02, 0.90, '', transform=ax.transAxes)
    
+    index = lambda i : int(frames_total*i/frames_number)
+    
     def init():
         line.set_data([], [])
         label.set_text('')
         return line, label
     
-    if X_cols == 1:
-        def animate(i):
-            line.set_data(X, Y[:,i])
-            label.set_text(label_function(i))
-            return line, label
-    else:
-        def animate(i):
-            line.set_data(X[:,i], Y[:,i])
-            label.set_text(label_function(i))
-            return line, label        
+    def animate(i):
+        i = index(i)
+        line.set_data(call_X_series(i), call_Y_series(i))
+        label.set_text(label_function(i))
+        return line, label
     
     anim = animation.FuncAnimation(fig, 
                                    animate, 
                                    init_func=init, 
                                    frames=frames_number, 
-                                   interval=frames_number*3, 
+                                   interval=1000/fps, 
                                    blit=True)
     
     return anim;
@@ -603,16 +637,17 @@ def animation_3D(X, Y, Z, figure_id=None, new_figure=True,
     
     Parameters
     ----------
-    X : np.array
+    X : np.array, list
         Data's X values. Can be a 1D n-array of length X_len or a 2D 
         array of size (T, X_len), where each row corresponds to a 
-        different data series.
-    Y : np.array
+        different data series. Can also be a 1D list or a 2D list.
+    Y : np.array, list
         Data's X values. Can be a 1D n-array of length Y_len or a 2D 
         array of size (T, Y_len), where each row corresponds to a 
-        different data series.
-    Z : np.array
-        Data. Must be a 3D array of size (T, Y_len, X_len).
+        different data series. Can also be a 1D list or a 2D list.
+    Z : np.array, list
+        Data. Should be a 3D array of size (T, Y_len, X_len). Can also 
+        be a 3D list.
     figure_id=None : int, optional
         A matplotlib.pyplot.figure's ID. If specified, it plots on that 
         figure, which can be already formatted with axis labels, i.e.
@@ -641,7 +676,68 @@ def animation_3D(X, Y, Z, figure_id=None, new_figure=True,
     
     """
     
-    X, Y = np.meshgrid(X, Y)
+    if isinstance(Z, np.ndarray):
+        
+        try:
+            Z_depth = len(Z[0,0,:])
+            Z_rows = len(Z[:,0,0])
+            Z_cols = len(Y[0,:,0])
+        except:
+            raise TypeError("Z should be a 3D array")
+        call_Z_series = lambda i : Z[:,:,i]
+            
+        if not isinstance(X, np.ndarray):
+            X = np.array(X).T
+        try:
+            X_rows = len(X[:,0])
+            X_cols = len(X[0,:])
+            call_X_series = lambda i : X[:,i]
+        except:
+            X_rows = len(X)
+            X_cols = 1
+            call_X_series = lambda i : X
+
+        if not isinstance(Y, np.ndarray):
+            Y = np.array(Y).T
+        try:
+            Y_rows = len(Y[:,0])
+            Y_cols = len(Y[0,:])
+            call_Y_series = lambda i : Y[:,i]
+        except:
+            Y_rows = len(X)
+            Y_cols = 1
+            call_Y_series = lambda i : Y
+        
+        if Z_rows != X_rows:
+            raise IndexError("Z, X should have same number of rows")
+        if Z_cols != Y_rows:
+            raise IndexError("Z should have as many columns as Y rows")
+        if Z_depth != X_cols:
+            raise IndexError("Z should have depth as X has columns")
+        if Z_depth != Y_cols:
+            raise IndexError("Z should have depth as Y has columns")
+    
+    else:
+
+        try:
+            Z[0][0][0]
+            call_Z_series = lambda i : Z[i]
+        except:
+            raise TypeError("Z should be a 3D list")
+        
+        X = list(X)
+        try:
+            X[0][0]
+            call_X_series = lambda i : X[i]
+        except:
+            call_X_series = lambda i : X
+
+        Y = list(Y)
+        try:
+            Y[0][0]
+            call_Y_series = lambda i : Y[i]
+        except:
+            call_Y_series = lambda i : Y
         
     if figure_id is not None:
         fig = plt.figure(figure_id)
@@ -656,9 +752,14 @@ def animation_3D(X, Y, Z, figure_id=None, new_figure=True,
         
         ax.clear()
         
-        ax.plot_surface(X, Y, Z[i,:,:], rstride=1, cstride=1, 
+        x = call_X_series(i)
+        y = call_Y_series(i)
+        
+        x, y = np.meshgrid(x, y)
+        
+        ax.plot_surface(x, y, call_Z_series(i), rstride=1, cstride=1, 
                         cmap=color_map, linewidth=0, antialiased=False)
-        ax.set_zlim(np.amin(Z),np.amax(Z))
+        ax.set_zlim(min(min(min(Z))), max(max(max(Z))))
         ax.text(0, -2, 0.40, label_function(i), transform=ax.transAxes)
         
         plt.show()

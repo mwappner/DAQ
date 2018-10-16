@@ -175,7 +175,7 @@ def saveplot(file, overwrite=False):
 
 #%%
 
-def savetext(datanumpylike, file, overwrite=False, header=''):
+def savetext(file, datanumpylike, overwrite=False, header=''):
     
     """Takes some array-like data and saves it on a '.txt' file.
     
@@ -187,10 +187,10 @@ def savetext(datanumpylike, file, overwrite=False, header=''):
     
     Variables
     ---------
-    datanumpylike : array, list
-        The data to be saved.
     file : string
         The name you wish (must include full path and extension)
+    datanumpylike : array, list
+        The data to be saved.
     overwrite=False : bool
         Indicates whether to overwrite or not.
     header='' : list
@@ -234,13 +234,12 @@ def savetext(datanumpylike, file, overwrite=False, header=''):
 
 #%%
 
-def savewav(datapyaudio,
-            file,
+def savewav(file,
+            datapyaudio,
             data_nchannels=1,
             data_format=pyaudio.paFloat32,
             data_samplerate=44100,
             overwrite=False):
-    
     """Takes a PyAudio byte stream and saves it on a '.wav' file.
     
     Takes a PyAudio byte stream and saves it on a '.wav' file. It 
@@ -253,10 +252,10 @@ def savewav(datapyaudio,
     
     Variables
     ---------
-    datapyaudio : str
-        PyAudio byte stream.
     file : str
         Desired file (must include full path and extension)
+    datapyaudio : str
+        PyAudio byte stream.
     data_nchannels=1 : int
         Data's number of audio channels.
     data_format : int
@@ -309,19 +308,18 @@ def savewav(datapyaudio,
 
 #%%
 
-def saveanimation(animation,
-                  file,
+def saveanimation(file,
+                  animation,
                   frames_per_second=30,
                   overwrite=False):
-    
     """Saves a matplotlib.animation object as '.gif' or '.mp4'.
     
     Variables
     ---------
-    animation : matplotlib.animation object
-        Animation to save.
     file : str
         Desired file (must include full path and extension).
+    animation : matplotlib.animation object
+        Animation to save.
     frames_per_second=30 : int
         Animation's frames per second.
     overwrite=False : bool
@@ -353,15 +351,14 @@ def saveanimation(animation,
     if not overwrite:
         file = free_file(file)
     
-    extension = os.path.splitext(file)
+    extension = os.path.splitext(file)[-1]
     
     if extension == '.mp4':
         animation.save(file,
-                       fps=frames_per_second, 
                        extra_args=['-vcodec', 'libx264'])
     elif extension == '.gif':
         animation.save(file,
-                       dpi=80,
+                       dpi=50,
                        writer='imagemagick')    
     
     print('Archivo guardado en {}'.format(file))
