@@ -440,7 +440,7 @@ name = 'Multichannel_Settling_Time'
 
 # Other parameters
 duration = periods_to_measure/signal_frequency
-samples_to_measure = int(samplerate * duration)
+samples_to_measure = int(samplerate * duration/1000)
 
 number_of_channels=3
 channels_to_test = ["Dev20/ai0",
@@ -470,7 +470,7 @@ with nid.Task() as read_task:
 
     read_task.ai_channels.add_ai_voltage_chan(
         flatten_channel_string(
-            [c.input_channel for c in channels_to_test]),
+            channels_to_test),
         max_val=10, min_val=-10)
     reader = AnalogMultiChannelReader(read_task.in_stream)
 
@@ -481,7 +481,7 @@ with nid.Task() as read_task:
     values_read = np.zeros(
         (number_of_channels, samples_to_measure), dtype=np.float64)
     reader.read_many_sample(
-        values_read, samples_to_measure_per_channel=samples_to_measure,
+        values_read, number_of_samples_per_channel=samples_to_measure,
         timeout=2)
 
     #np.testing.assert_allclose(values_read, rtol=0.05, atol=0.005)
@@ -493,7 +493,7 @@ print("For {} channels, signal has size {}".format(
         np.size(signal)))
 time = np.linspace(0, duration, samples_to_measure)
 try:
-    data = np.zeros((values_read[:,0], values_read[0,:]+1))
+    data = np.zeros((values_read[0,:], values_read[:,0]+1))
     data[:,0] = time
     data[:,1:] = values_read[0,:]
     data[:,2:] = values_read[1,:]
