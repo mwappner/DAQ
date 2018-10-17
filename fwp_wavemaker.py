@@ -5,8 +5,6 @@ It includes:
 Defined functions for several waveforms incorporating a switcher to make choosing easier.
 A class for evaluating the multiple waveforms
 A class for calculating fourier partial sums and evaluating it.
-
-@author: Marcos
 """
 
 import numpy as np
@@ -329,7 +327,7 @@ class Wave:
         self._frequency = value    
         
     def evaluate(self, time, *args):
-        """Takes in an array-like object to evaluate the funcion in.
+        '''Takes in an array-like object to evaluate the funcion in.
         
         Parameters
         ----------
@@ -342,7 +340,7 @@ class Wave:
         -------
         
         Evaluated waveform 
-        """          
+        '''         
 
         if isinstance(self.amplitude, (list, tuple, np.ndarray)):
             #for sums 
@@ -351,6 +349,52 @@ class Wave:
             wave = self.waveform(time, self._frequency, *args, self.extra_args) * self.amplitude
         return wave
 
+    def evaluate_sr(self, sampling_rate, duration=None, nsamples=None, return_time=False, custom_args=()):
+        '''Evaluates the function in a time vector with the given sampling rate
+        for given duration or ampunt of samples.
+        
+        User must specify either duration or nsamples, but not both.
+        
+        Parameters
+        ----------
+        sampling_rate : int
+            time vector in which to evaluate the funcion
+        duration : float (optional)
+            duration of signal. Default = None
+        nsamples : int (optional)
+            amount of samples tu return. Default = None
+        return_time : bool (optional)
+            decides if time vector is returned or not
+        custom_args : tuple (optional)
+            extra arguments to be passed to evaluated function
+            
+        Returns
+        -------
+        
+        Evaluated waveform 
+        '''
+        if sampling_rate <1:
+            raise ValueError('Sampling rate must be postive integer.')
+            
+        if duration is None:
+            if nsamples is None:
+                raise ValueError('Must specify either duration or nsamples.')
+            else:
+                if nsamples < 1:
+                    raise ValueError('nsamples must be positive integer.')
+                time = np.linspace(0, nsamples / sampling_rate, nsamples)
+        else:
+            if nsamples is not None:
+               raise ValueError("Can't specify both duration and nsamples. One must be None (dafault).")
+            else:
+                if not duration > 0:
+                    raise ValueError('duration must be positive.')
+                time = np.linspace(0, duration, int(sampling_rate * duration))
+                
+        if return_time:
+            return time, self.evaluate(time, *custom_args)
+        else:
+            return self.evaluate(time, *custom_args)
 
 #%% Fourier series classfor wave generator
 
