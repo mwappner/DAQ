@@ -42,7 +42,7 @@ def copy(string):
 
 #%%
 
-def error_value(X, dX, error_digits=2, units='',
+def error_value(X, dX, error_digits=1, units='',
                 string_scale=True, one_point_scale=False, legend=False):
     """Rounds up value and error of a measure. Also makes a latex string.
     
