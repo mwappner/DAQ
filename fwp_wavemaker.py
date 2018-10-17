@@ -396,6 +396,36 @@ class Wave:
         else:
             return self.evaluate(time, *custom_args)
 
+#%%
+class MultichannelWave(Wave):
+    
+    def __init__(self):
+        self.waves = []
+        
+    def add_channel(self, *args, **kwargs):
+        self.waves.append(Wave(*args, **kwargs))
+        
+    def evaluate(self, *args, **kwargs):
+        signal = [w.evaluate(*args, **kwargs) for w in self.waves]
+        return np.array(signal).T
+    
+    def evauate_sr(self, *args, **kwargs):
+        signal = [w.evaluate_sr(*args, **kwargs) for w in self.waves]
+        return np.array(signal).T
+    
+'''Example:
+    
+    mw = MultichannelWave()
+    waves = ('sine', 'sine', 'square')
+    frequencies = (2, 3, 4)
+    amplitudes = (1, .7, .8)
+    for w, f, a in zip(waves, frequencies, amplitudes):
+        mw.add_channel(w, f, a)
+    
+    time = np.linspace(0, 1, 400)
+    signal = mw.evaluate(time)
+    plt.plot(time, signal)
+    '''
 #%% Fourier series classfor wave generator
 
 def fourier_switcher(input_waveform):
