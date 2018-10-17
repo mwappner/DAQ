@@ -51,7 +51,8 @@ class Osci:
     """Allows communication with a Tektronix Digital Oscilloscope.
     
     It allows communication with multiple models, based on the official 
-    Programmer Guide (https://www.tek.com/oscilloscope/tds1000-manual).
+    Programmer Guide (https://www.tek.com/oscilloscope/tds1002-manual/
+    tds1000-and-tds2000-series-user-manual).
     
         TBS1000B/EDU, 
         TBS1000, 
@@ -135,7 +136,28 @@ class Osci:
         self.port = port
         self.osci = osci
         self.config_measure = self.get_config_measure()
+        self.config_screen = self.get_config_screen()
         # This last line saves the current measurement configuration
+
+    def screen(self, channels=(1,2)):
+        
+        """Takes a full measure of a signal on one or two channels.
+        
+        Parameters
+        ----------
+        channels=(1, 2) : int {1, 2}, optional
+            Number of the measure's channel.
+        
+        Returns
+        -------
+        result : int, float
+            Measured value.
+        
+        See Also
+        --------
+        Osci.get_config_screen()
+        
+        """        
 
     def measure(self, mtype, channel=1, print_result=False):
         
@@ -266,6 +288,34 @@ class Osci:
         self.config_measure = self.get_config_measure()
         
         return
+
+    def get_config_screen(self):
+        
+        """Returns the current measurements' configuration.
+        
+        Parameters
+        ----------
+        nothing
+        
+        Returns
+        -------
+        configuration : dict as {'Source': int, 'Type': str}
+            It states the source and type of configured measurement.
+            
+        """
+        
+        configuration = {}
+        
+        xze, xin, yze, ymu, yoff = self.osci.query_ascii_values(
+                'WFMPRE:XZE?;XIN?;YZE?;YMU?;YOFF?;',
+                separator=';')
+        
+        configuration.update({'Source': # channel
+            find_1st_number(self.osci.query('MEASU:IMM:SOU?'))})
+        configuration.update({'Type': # type of measurement
+            self.osci.query('MEASU:IMM:TYP?')})
+    
+        return configuration
 
 #%%
 
@@ -483,7 +533,7 @@ class Gen:
             if configuration[channel]['Waveform'] == 'RAMP':
                 aux = self.gen.query('SOUR{}:FUNC:RAMP:SYMM?'.format(
                         channel)) # NOT SURE I SHOULD USE IF
-                configuration['RAMP Symmetry'] = find_1st_number(aux)
+                configuration[channel]['RAMP Symmetry'] = find_1st_number(aux)
             else:
                 configuration[channel]['RAMP Symmetry'] =  50.0
             
@@ -554,9 +604,10 @@ class Gen:
 
         # These are some keys that help recognize the waveform
         dic = {'sin': 'SIN',
-               'squ': 'SQU',
+               'squ': 'PULS',
                'pul': 'PULS',
-               'ram': 'RAMP', # ramp and triangle
+               'tri' : 'RAMP', # ramp and triangle
+               'ram': 'RAMP', 
                'lor': 'LOR', # lorentzian
                'sinc': 'SINC', # sinx/x
                'gau': 'GAUS'} # gaussian
