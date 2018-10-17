@@ -243,6 +243,63 @@ gen.output(False)
 
 gen.gen.close()
 
+#%% interbuffer_time
+
+# PARAMETERS
+
+# Main parameters
+samplerate = 400e3
+mode = nid.constants.TerminalConfiguration.NRSE
+
+signal_frequency = 10#500
+periods_to_measure = 10
+#gen_port = 'ASRL1::INSTR'
+#gen_totalchannels = 2
+
+name = 'InterBuffer_Time'
+
+# Other parameters
+duration = periods_to_measure/signal_frequency
+samples_to_measure = int(samplerate * duration)
+
+#gen = ins.Gen(port=gen_port, nchannels=gen_totalchannels)
+
+folder = os.path.join(os.getcwd(),
+                      'Measurements',
+                      name)
+folder = sav.new_dir(folder)
+filename=os.path.join(folder, name + '.txt')
+header = 'Time [s]\tData [V]'
+
+# ACTIVE CODE
+
+#gen.output(True, waveform='ramp', 
+#           frequency=signal_frequency,
+#           amplitude=2)
+with nid.Task() as task: 
+    
+    # Configure channel
+    task.ai_channels.add_ai_voltage_chan(
+            "Dev20/ai1",
+            terminal_config=mode)
+    
+    task.timing.cfg_samp_clk_timing(
+            rate=samplerate,
+            samps_per_chan=samples_to_measure)
+
+    signal = task.read(
+            number_of_samples_per_channel=samples_to_measure)
+    task.wait_until_done()
+#gen.output(False)
+
+# Save measurement
+time = np.linspace(0, duration, samples_to_measure)
+np.savetxt(filename,
+           np.array([time, signal]).T,
+           header=header)
+
+#gen.gen.close()
+
 #%% Settling_Time
 """This script is designed to measure settling time for fixed conditions.
 
@@ -273,9 +330,9 @@ samplerate = 400e3
 mode = nid.constants.TerminalConfiguration.NRSE
 
 signal_frequency = 10#500
-periods_to_measure = 50
-gen_port = 'ASRL1::INSTR'
-gen_totalchannels = 2
+periods_to_measure = 10
+#gen_port = 'ASRL1::INSTR'
+#gen_totalchannels = 2
 
 name = 'Settling_Time'
 
@@ -283,19 +340,20 @@ name = 'Settling_Time'
 duration = periods_to_measure/signal_frequency
 samples_to_measure = int(samplerate * duration)
 
-gen = ins.Gen(port=gen_port, nchannels=gen_totalchannels)
+#gen = ins.Gen(port=gen_port, nchannels=gen_totalchannels)
 
 folder = os.path.join(os.getcwd(),
                       'Measurements',
                       name)
 folder = sav.new_dir(folder)
-header = ['Time [s]', 'Data [V]']
+filename=os.path.join(folder, name + '.txt')
+header = 'Time [s]\tData [V]'
 
 # ACTIVE CODE
 
-gen.output(True, waveform='square', 
-           frequency=signal_frequency,
-           amplitude=2)
+#gen.output(True, waveform='square', 
+#           frequency=signal_frequency,
+#           amplitude=2)
 with nid.Task() as task:
     
     # Configure channel
@@ -304,21 +362,21 @@ with nid.Task() as task:
             terminal_config=mode)
     
     task.timing.cfg_samp_clk_timing(
-            rate=sr,
+            rate=samplerate,
             samps_per_chan=samples_to_measure)
 
     signal = task.read(
             number_of_samples_per_channel=samples_to_measure)
     task.wait_until_done()
-gen.output(False)
+#gen.output(False)
 
 # Save measurement
 time = np.linspace(0, duration, samples_to_measure)
-sav.savetext(filename(sr),
-             np.array([time, signal]).T,
-             header=header)
+np.savetxt(filename,
+           np.array([time, signal]).T,
+           header=header)
 
-gen.gen.close()
+#gen.gen.close()
 
 #%% Multichannel_Settling_Time
 """This script is designed to measure multichannel settling time.
@@ -342,31 +400,36 @@ Is 100% always positive slope or always negative slope?
 # PARAMETERS
 
 # Main parameters
-samplerate = 400e3
+samplerate = 200e3
 mode = nid.constants.TerminalConfiguration.NRSE
 
 signal_frequency = 10
-signal_pk_amplitude = 2
-periods_to_measure = 50
+periods_to_measure = 10
 gen_port = 'ASRL1::INSTR'
 gen_totalchannels = 2
+amplitude_min = 
+amplitude_max = 
+amplitude_n = 3
 
-name = 'Multichannel_Settling_Time'
+name = 'Interchannel_Time'
+
+channels_key = ["Dev20/ai3", "Dev20/ai0", "Dev20/ai1", "Dev20/ai2"]
+#"Dev20/ai0", #naranja
+#"Dev20/ai1", #amarillo
+#"Dev20/ai2", #blanco
+#"Dev20/ai3", # rojo
+channels_order = [[0,1,3,4],
+                  [3,2,1,0],
+                  [0,3,1,2],
+                  [0,2,1,3]]
+channels = {i:ch for i, ch in enumerate(channels_key)}
 
 # Other parameters
 duration = periods_to_measure/signal_frequency
 samples_to_measure = int(samplerate * duration)
-channels = ["Dev20/ai0",
-            "Dev20/ai1",
-            "Dev20/ai2",
-            "Dev20/ai3",
-            "Dev20/ai4",
-            "Dev20/ai5",
-            "Dev20/ai6",
-            "Dev20/ai7"]
 
 gen = ins.Gen(port=gen_port, nchannels=gen_totalchannels)
-signal_slope = signal_pk_amplitude * signal_frequency
+amplitude = np.linspace(amplitude_min, amplitude_max, amplitude_n)
 
 folder = os.path.join(os.getcwd(),
                       'Measurements',
@@ -374,50 +437,76 @@ folder = os.path.join(os.getcwd(),
 folder = sav.new_dir(folder)
 filename = lambda nchannels : os.path.join(
         folder, 
-        'NChannels_{}.txt'.format(nchannels))
-header = 'Time [s]\tData [V]'
+        'Channels_{}.txt'.format(nchannels))
+
+def headermaker(nchannels, channels=channels):
+    header = 'time[s]'
+    for ch in channels[:nchannels]:
+        header += '\t ch {} [V]'.format(ch.split('/')[-1])
+    return header
+
+footer = 'samplingrate={}Hz, Vpp={}V, mode={}, signal_freq={}Hz'.format(
+            samplerate,
+            signal_pk_amplitude,
+            str(mode).split('.')[-1],
+            signal_frequency)
 
 # ACTIVE CODE
 
-gen.output(True, waveform='ramp100', 
-           frequency=signal_frequency,
-           amplitude=2)
-with nid.Task() as task:
+#gen.output(True, waveform='ramp100', 
+#           frequency=signal_frequency,
+#           amplitude=2)
 
-    task.timing.cfg_samp_clk_timing(
-            rate=sr,
-            samps_per_chan=samples_to_measure)
+for order in channels_order:
     
-    for nchannels, channel in enumerate(channels):
-        
-        # Configure channel
-        task.ai_channels.add_ai_voltage_chan(
-                channel,
-                terminal_config=mode)
-#                ai_max=2,
-#                ai_min=-2)
+    with nid.Task() as task:
 
-        # Measure
-        signal = task.read(
-                number_of_samples_per_channel=samples_to_measure)
-        task.wait_until_done()
+        for key in order:
+        
+            # Configure channel
+            task.ai_channels.add_ai_voltage_chan(
+                    channels[key],
+                    terminal_config=mode)
+        #                ai_max=2,
+        #                ai_min=-2)
+        
+        # Set sampling_rate and samples per channel
+        task.timing.cfg_samp_clk_timing(
+                rate=samplerate,
+                samps_per_chan=samples_to_measure)
+        
+        
+        for amp in amplitude:
+            
+            # 
+            gen.output(True, waveform='ramp100', 
+                       frequency=signal_frequency,
+                       amplitude=amp)
+            
+            # Measure
+            signal = task.read(
+                    number_of_samples_per_channel=samples_to_measure)
+            task.wait_until_done()
         
         # Save measurement
-        nchannels = nchannels + 1
+        nchannels += 1
         print("For {} channels, signal has size {}".format(
                 nchannels,
                 np.size(signal)))
-        time = np.linspace(0, duration, samples_to_measure)
-        try:
-            data = np.zeros((signal[:,0], signal[0,:]+1))
-            data[:,0] = time
-            data[:,1:] = signal
-        except IndexError:
-            data = np.array([time, signal]).T
-        np.savetxt(filename(nchannels), data, header=header)
+        time = np.expand_dims(np.linspace(0, duration, samples_to_measure), axis=0)
+        
+        data = np.array(signal).T
+        if data.ndim==1:
+            data = np.expand_dims(data, axis=0).T
 
-gen.output(False)
-gen.gen.close()
+        data = np.concatenate((time.T, data), axis=1)
+        
+        np.savetxt(filename(nchannels), data,
+                   header=headermaker(nchannels),
+                   footer=footer)
+
+#gen.output(False)
+#gen.gen.close()
 
 
 
