@@ -88,3 +88,42 @@ plt.ylabel("Amplitud (u.a.)")
 plt.xlabel("Frecuencia de muestreo (Hz)")
 fplt.add_style(linewidth=1)
 
+#%%
+
+# PARAMETERS
+
+# Main parameters
+samplerate = 4e3
+
+signal_frequency = 10
+signal_pk_amplitude = 2
+periods_to_measure = 10
+#gen_port = 'ASRL1::INSTR'
+#gen_totalchannels = 2
+
+name = 'Multichannel_Settling_Time'
+folder = os.path.join(os.getcwd(),
+                      'Measurements',
+                      name)
+filename = lambda nchannels : os.path.join(
+        folder, 
+        'NChannels_{}.txt'.format(nchannels))
+
+# Other parameters
+channels = ["Dev20/ai0",
+            "Dev20/ai1",
+            "Dev20/ai9",
+            "Dev20/ai3",
+            "Dev20/ai8",
+#            "Dev20/ai5",
+#            "Dev20/ai6",
+            "Dev20/ai11"]
+
+signal_slope = signal_pk_amplitude * signal_frequency
+
+all_data = {}
+for nchannels in range(len(channels)):
+    all_data.update({nchannels+1: np.loadtxt(filename(nchannels+1))})
+    
+plt.figure()
+plt.plot(all_data[3][:,0], all_data[3][:,1:])
