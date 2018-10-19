@@ -127,3 +127,41 @@ for nchannels in range(len(channels)):
     
 plt.figure()
 plt.plot(all_data[3][:,0], all_data[3][:,1:])
+
+
+
+#%% Sample rate + frequency sweep 
+name = 'Frequency_Sweep'
+folder = os.path.join(os.getcwd(),
+                      'Measurements',
+                      name)
+
+rawdata=[os.path.join(
+        folder,f) for f in os.listdir(folder) if not f.endswith('Fourier.txt')]
+        
+maxt= []
+sr=[]
+freqgen=[]
+for f in rawdata:
+        time,data=np.loadtxt(f)
+        np.append(sr,f.split('_')[1])
+        np.append(freqgen,f.split('_')[4])
+        for i in range(len(data)):
+            if data[i]>data[i-1] and data[i]>data[i+1] and data[i]>data[i-2] and data[i]>data[i+2]:
+                np.append(maxt, time[i])
+
+
+deltatau=np.zeros(len(maxt)-1)
+for j in range(len(maxt)-1):
+    deltatau=maxt[j]-maxt[j+1]
+
+freqm=np.mean(deltatau)/2*np.pi
+
+
+plt.figure()
+plt.plot(freq, frequencies, '.')
+plt.title('Frecuencias')
+plt.ylabel('Frecuencia a mano (Hz)')
+plt.xlabel('Frecuencia gen (Hz)')
+plt.grid()
+plt.show()
