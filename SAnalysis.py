@@ -88,3 +88,80 @@ plt.ylabel("Amplitud (u.a.)")
 plt.xlabel("Frecuencia de muestreo (Hz)")
 fplt.add_style(linewidth=1)
 
+#%%
+
+# PARAMETERS
+
+# Main parameters
+samplerate = 4e3
+
+signal_frequency = 10
+signal_pk_amplitude = 2
+periods_to_measure = 10
+#gen_port = 'ASRL1::INSTR'
+#gen_totalchannels = 2
+
+name = 'Multichannel_Settling_Time'
+folder = os.path.join(os.getcwd(),
+                      'Measurements',
+                      name)
+filename = lambda nchannels : os.path.join(
+        folder, 
+        'NChannels_{}.txt'.format(nchannels))
+
+# Other parameters
+channels = ["Dev20/ai0",
+            "Dev20/ai1",
+            "Dev20/ai9",
+            "Dev20/ai3",
+            "Dev20/ai8",
+#            "Dev20/ai5",
+#            "Dev20/ai6",
+            "Dev20/ai11"]
+
+signal_slope = signal_pk_amplitude * signal_frequency
+
+all_data = {}
+for nchannels in range(len(channels)):
+    all_data.update({nchannels+1: np.loadtxt(filename(nchannels+1))})
+    
+plt.figure()
+plt.plot(all_data[3][:,0], all_data[3][:,1:])
+
+
+
+#%% Sample rate + frequency sweep 
+name = 'Frequency_Sweep'
+folder = os.path.join(os.getcwd(),
+                      'Measurements',
+                      name)
+
+rawdata=[os.path.join(
+        folder,f) for f in os.listdir(folder) if not f.endswith('Fourier.txt')]
+        
+maxt= []
+sr=[]
+freqgen=[]
+for f in rawdata:
+        time,data=np.loadtxt(f)
+        np.append(sr,f.split('_')[1])
+        np.append(freqgen,f.split('_')[4])
+        for i in range(len(data)):
+            if data[i]>data[i-1] and data[i]>data[i+1] and data[i]>data[i-2] and data[i]>data[i+2]:
+                np.append(maxt, time[i])
+
+
+deltatau=np.zeros(len(maxt)-1)
+for j in range(len(maxt)-1):
+    deltatau=maxt[j]-maxt[j+1]
+
+freqm=np.mean(deltatau)/2*np.pi
+
+
+plt.figure()
+plt.plot(freq, frequencies, '.')
+plt.title('Frecuencias')
+plt.ylabel('Frecuencia a mano (Hz)')
+plt.xlabel('Frecuencia gen (Hz)')
+plt.grid()
+plt.show()

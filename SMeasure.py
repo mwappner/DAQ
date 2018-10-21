@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import os
 import nidaqmx as nid
 import numpy as np
+from time import sleep
 
 #%% Only_One_Measure
 """
@@ -113,7 +114,7 @@ fourier_data = [] # contains sampling rate, main frequency and its power
 with nid.Task() as task:
     
     task.ai_channels.add_ai_voltage_chan(
-            "Dev20/ai1",
+            "Dev20/ai3",
             terminal_config=mode)
     
     for sr in samplerate:
@@ -155,20 +156,21 @@ Fourier amplitude.
 # Main parameters
 samplerate_min = 10
 samplerate_max = 400e3
-samplerate_n = 5#100
+samplerate_n = 20#100
 mode = nid.constants.TerminalConfiguration.NRSE
 
-signal_frequency_n = 10#500
-port = 'ASRL1::INSTR'
+signal_frequency_n = 50#500
+port = 'USB::0x0699::0x0346::C034198::INSTR'
 
 name = 'Frequency_Sweep'
 
 # Other parameters
-samplerate = np.linspace(samplerate_min,
-                         samplerate_max,
-                         samplerate_n)
+samplerate_step = int((samplerate_max - samplerate_min) / samplerate_n)
+samplerate = np.arange(samplerate_min,
+                       samplerate_max,
+                       samplerate_step)
 
-gen = ins.Gen(port=port, nchannels=2)
+gen = ins.Gen(port=port, nchannels=1)
 
 folder = os.path.join(os.getcwd(),
                       'Measurements',
@@ -176,15 +178,15 @@ folder = os.path.join(os.getcwd(),
 folder = sav.new_dir(folder)
 filename = lambda samplerate, signal_frequency : os.path.join(
         folder, 
-        'Sr_{:.0f}_Hz_Freq_{:.0f}_Hz.txt'.format(signal_frequency, 
-                                                 samplerate))
+        'Sr_{:.0f}_Hz_Freq_{:.0f}_Hz.txt'.format(samplerate, 
+                                                 signal_frequency))
 filename_fourier = lambda samplerate : os.path.join(
         folder,
         'Sr_{:.0f}_Hz_Fourier.txt'.format(samplerate))
 header = ['Time [s]', 'Data [V]']
-header_fourier = ['Sampling rate (Hz)',
-                  'Main frequency (Hz)',
-                  'Intensity (u.a.)']
+header_fourier = ['Frequency (Hz)',
+                  'Fourier frequency (Hz)',
+                  'Fourier intensity (u.a.)']
 
 # ACTIVE CODE
 
@@ -196,14 +198,20 @@ with nid.Task() as task:
             terminal_config=mode)
         
     for sr in samplerate:
-        print('Doing SR {} Hz'.format(sr))
+        print('Doing SR {:.0f} Hz'.format(sr))
         
         # Make frequency array for a given samplerate
         signal_frequency_min = sr/10
         signal_frequency_max = 5*sr
-        signal_frequency = np.linspace(signal_frequency_min,
-                                       signal_frequency_max,
-                                       signal_frequency_n)
+        signal_frequency_step = samplerate_max - samplerate_min
+        signal_frequency_step = int(signal_frequency_step / signal_frequency_n)
+        signal_frequency = np.arange(signal_frequency_min,
+                                     signal_frequency_max,
+                                     signal_frequency_step)
+        print('That leaves me on {} to {} Hz with a step {} Hz'.format(
+                signal_frequency_min,
+                signal_frequency_max,
+                signal_frequency_step))
         
         # Configure clock and measurement
         duration = 10/signal_frequency_min
@@ -214,10 +222,11 @@ with nid.Task() as task:
 
         fourier_data = []
         for freq in signal_frequency:
+            print("There, doing {:.0f} Hz".format(freq))
             
             # Reconfigure function generator
             gen.output(True, channel=1, print_changes=False,
-                       frequency=freq, amplitude=2)
+                       waveform='sin', frequency=freq, amplitude=2)
 
             # Measure with DAQ
             signal = task.read(
@@ -226,38 +235,90 @@ with nid.Task() as task:
 
             # Save measurement
             time = np.linspace(0, duration, samples_to_measure)
-            sav.savetext(filename(sr),
+            sav.savetext(filename(sr, freq),
                          np.array([time, signal]).T,
                          header=header)
             
             # Get main frequency and Fourier amplitude
             max_freq, fourier_peak = anly.main_frequency(signal, sr)
-            fourier_data.append((sr, max_freq, fourier_peak))
+            fourier_data.append((freq, max_freq, fourier_peak))
+            
+            sleep(10e-3)
 
         # Save samplerate, main frequency and Fourier amplitude
-        sav.savetext(os.path.join(folder, 
-                                  filename_fourier),
+        sav.savetext(filename_fourier(sr),
                      np.array(fourier_data), 
                      header=header_fourier)
 gen.output(False)
 
 gen.gen.close()
 
+#%% Interbuffer_time
+"""This script is designed to detect time delay between buffers on a fix signal.
+
+It plays on a 10Hz, 2Vpp positive-slope ramp signal. It measures voltage vs 
+time on one channel. Then it saves it.
+"""
+
+# PARAMETERS
+
+# Main parameters
+samplerate = 400e3
+mode = nid.constants.TerminalConfiguration.NRSE
+
+signal_frequency = 10#500
+periods_to_measure = 10
+
+name = 'Interbuffer_Time'
+
+# Other parameters
+duration = periods_to_measure/signal_frequency
+samples_to_measure = int(samplerate * duration)
+
+folder = os.path.join(os.getcwd(),
+                      'Measurements',
+                      name)
+folder = sav.new_dir(folder)
+filename=os.path.join(folder, name + '.txt')
+header = 'Time [s]\tData [V]'
+
+# ACTIVE CODE
+
+#gen.output(True, waveform='ramp', 
+#           frequency=signal_frequency,
+#           amplitude=2)
+with nid.Task() as task: 
+    
+    # Configure channel
+    task.ai_channels.add_ai_voltage_chan(
+            "Dev20/ai1",
+            terminal_config=mode)
+    
+    task.timing.cfg_samp_clk_timing(
+            rate=samplerate,
+            samps_per_chan=samples_to_measure)
+
+    signal = task.read(
+            number_of_samples_per_channel=samples_to_measure)
+    task.wait_until_done()
+
+# Save measurement
+time = np.linspace(0, duration, samples_to_measure)
+np.savetxt(filename,
+           np.array([time, signal]).T,
+           header=header)
+
 #%% Settling_Time
 """This script is designed to measure settling time for fixed conditions.
 
-It generates a low-frequency square wave. And this wave is measured at 
+It plays on a low-frequency square wave. And this wave is measured at 
 maximum samplerate in order to watch the time it takes for the NI DAQ 
 to fixe to minimum and maximum voltage. This script saves time and 
 voltage.
 
 Warnings
 --------
-Must first check I can generate a fwp_lab_instruments square wave.
->>> gen.output(True, waveform='square')
-Should also check I can change duty cycle.
->>> gen.output(True, waveform='square75')
-Could also ask what voltage the DAQ is used to measure:
+Could ask what voltage the DAQ is used to measure:
 >>> with nid.Task() as task:
 >>>     task.ai_channels.add_ai_voltage_chan(
 >>>             "Dev20/ai1",
@@ -273,9 +334,7 @@ samplerate = 400e3
 mode = nid.constants.TerminalConfiguration.NRSE
 
 signal_frequency = 10#500
-periods_to_measure = 50
-gen_port = 'ASRL1::INSTR'
-gen_totalchannels = 2
+periods_to_measure = 10
 
 name = 'Settling_Time'
 
@@ -283,19 +342,18 @@ name = 'Settling_Time'
 duration = periods_to_measure/signal_frequency
 samples_to_measure = int(samplerate * duration)
 
-gen = ins.Gen(port=gen_port, nchannels=gen_totalchannels)
-
 folder = os.path.join(os.getcwd(),
                       'Measurements',
                       name)
 folder = sav.new_dir(folder)
-header = ['Time [s]', 'Data [V]']
+filename=os.path.join(folder, name + '.txt')
+header = 'Time [s]\tData [V]'
 
 # ACTIVE CODE
 
-gen.output(True, waveform='square', 
-           frequency=signal_frequency,
-           amplitude=2)
+#gen.output(True, waveform='square', 
+#           frequency=signal_frequency,
+#           amplitude=2)
 with nid.Task() as task:
     
     # Configure channel
@@ -304,68 +362,57 @@ with nid.Task() as task:
             terminal_config=mode)
     
     task.timing.cfg_samp_clk_timing(
-            rate=sr,
+            rate=samplerate,
             samps_per_chan=samples_to_measure)
 
     signal = task.read(
             number_of_samples_per_channel=samples_to_measure)
     task.wait_until_done()
-gen.output(False)
 
 # Save measurement
 time = np.linspace(0, duration, samples_to_measure)
-sav.savetext(filename(sr),
-             np.array([time, signal]).T,
-             header=header)
+np.savetxt(filename,
+           np.array([time, signal]).T,
+           header=header)
 
-gen.gen.close()
+#%% Interchannel_Time
+"""This script is designed to measure interchannel time-delay.
 
-#%% Multichannel_Settling_Time
-"""This script is designed to measure multichannel settling time.
-
-It generates a low-frequency ramp wave (sawtooth like). And this wave is 
+It plays on a low-frequency ramp wave (sawtooth like). And this wave is 
 measured at maximum samplerate in order to watch the time it takes for 
 the NI DAQ to fix to another channel.
 
 This is repeated on a sweep for different number of channels. For each 
 of them, it saves time and voltage.
 
-Warnings
---------
-Must first check I can generate a ramp with fwp_lab_instruments.
->>> gen.output(True, 'ramp')
-Should also check I can change ramp simmetry.
->>> gen.output(True, 'ramp100')
-Is 100% always positive slope or always negative slope?
 """
 
 # PARAMETERS
 
 # Main parameters
-samplerate = 400e3
+samplerate = 200e3
 mode = nid.constants.TerminalConfiguration.NRSE
 
 signal_frequency = 10
 signal_pk_amplitude = 2
-periods_to_measure = 50
-gen_port = 'ASRL1::INSTR'
-gen_totalchannels = 2
+periods_to_measure = 10
 
-name = 'Multichannel_Settling_Time'
+name = 'Interchannel_Time'
 
 # Other parameters
 duration = periods_to_measure/signal_frequency
 samples_to_measure = int(samplerate * duration)
-channels = ["Dev20/ai0",
+channels = [
+            "Dev20/ai0",
             "Dev20/ai1",
-            "Dev20/ai2",
+            "Dev20/ai9",
             "Dev20/ai3",
-            "Dev20/ai4",
-            "Dev20/ai5",
-            "Dev20/ai6",
-            "Dev20/ai7"]
+            "Dev20/ai8",
+#            "Dev20/ai5",
+#            "Dev20/ai6",
+            "Dev20/ai11"
+            ]
 
-gen = ins.Gen(port=gen_port, nchannels=gen_totalchannels)
 signal_slope = signal_pk_amplitude * signal_frequency
 
 folder = os.path.join(os.getcwd(),
@@ -375,19 +422,26 @@ folder = sav.new_dir(folder)
 filename = lambda nchannels : os.path.join(
         folder, 
         'NChannels_{}.txt'.format(nchannels))
-header = 'Time [s]\tData [V]'
+
+def headermaker(nchannels, channels=channels):
+    header = 'time[s]'
+    for ch in channels[:nchannels]:
+        header += '\t ch {} [V]'.format(ch.split('/')[-1])
+    return header
+
+footer = 'samplingrate={}Hz, Vpp={}V, mode={}, signal_freq={}Hz'.format(
+            samplerate,
+            signal_pk_amplitude,
+            str(mode).split('.')[-1],
+            signal_frequency)
 
 # ACTIVE CODE
 
-gen.output(True, waveform='ramp100', 
-           frequency=signal_frequency,
-           amplitude=2)
+#gen.output(True, waveform='ramp100', 
+#           frequency=signal_frequency,
+#           amplitude=2)
 with nid.Task() as task:
 
-    task.timing.cfg_samp_clk_timing(
-            rate=sr,
-            samps_per_chan=samples_to_measure)
-    
     for nchannels, channel in enumerate(channels):
         
         # Configure channel
@@ -396,6 +450,124 @@ with nid.Task() as task:
                 terminal_config=mode)
 #                ai_max=2,
 #                ai_min=-2)
+        
+        # Set sampling_rate and samples per channel
+        task.timing.cfg_samp_clk_timing(
+                rate=samplerate,
+                samps_per_chan=samples_to_measure)
+        
+        # Measure
+        signal = task.read(
+                number_of_samples_per_channel=samples_to_measure)
+        task.wait_until_done()
+        
+        # Save measurement
+        nchannels += 1
+        print("For {} channels, signal has size {}".format(
+                nchannels,
+                np.size(signal)))
+        time = np.expand_dims(np.linspace(0, duration, samples_to_measure), axis=0)
+        
+        data = np.array(signal).T
+        if data.ndim==1:
+            data = np.expand_dims(data, axis=0).T
+
+        data = np.concatenate((time.T, data), axis=1)
+        
+        np.savetxt(filename(nchannels), data,
+                   header=headermaker(nchannels),
+                   footer=footer)
+
+#%% Interchannel_Time_Order
+"""This script is designed to measure interchannel time-delay.
+
+It generates a low-frequency ramp wave (sawtooth like). And this wave is 
+measured at maximum samplerate in order to watch the time it takes for 
+the NI DAQ to fix to another channel.
+
+This is repeated on a sweep for different order of channels. For each 
+of them, it saves time and voltage.
+
+"""
+
+# PARAMETERS
+
+# Main parameters
+samplerate = 100e3
+mode = nid.constants.TerminalConfiguration.NRSE
+
+signal_frequency = 10
+signal_pk_amplitude = 8
+periods_to_measure = 10
+gen_port = 'USB::0x0699::0x0346::C034198::INSTR'
+gen_totalchannels = 1
+
+name = 'Interchannel_Time_Order'
+
+channels_key = ["Dev20/ai3", "Dev20/ai0", "Dev20/ai1", "Dev20/ai2"]
+#"Dev20/ai3", # rojo
+#"Dev20/ai0", #naranja
+#"Dev20/ai1", #amarillo
+#"Dev20/ai2", #blanco
+channels_order = [[0,1,2,3],
+                  [3,2,1,0],
+                  [0,3,1,2],
+                  [0,2,1,3]]
+
+# Other parameters
+duration = periods_to_measure/signal_frequency
+samples_to_measure = int(samplerate * duration)
+
+channels = {i: ch for i, ch in enumerate(channels_key)}
+
+gen = ins.Gen(port=gen_port, nchannels=gen_totalchannels)
+
+folder = os.path.join(os.getcwd(),
+                      'Measurements',
+                      name)
+folder = sav.new_dir(folder)
+filename = lambda order : os.path.join(
+        folder, 
+        'Channels_{}.txt'.format(''.join([str(key) for key in order])))
+        
+def headermaker(order, channels=channels):
+    header = 'time[s]'
+    for key in order:
+        header += '\t ch {} [V]'.format(channels[key].split('/')[-1])
+    return header
+
+footer = 'samplingrate={}Hz, Vpp={}V, mode={}, signal_freq={}Hz'.format(
+            samplerate,
+            signal_pk_amplitude,
+            str(mode).split('.')[-1],
+            signal_frequency)
+
+# ACTIVE CODE
+
+gen.output(True, waveform='ramp100', 
+           frequency=signal_frequency,
+           amplitude=2)
+
+for order in channels_order:
+    
+    with nid.Task() as task:
+
+#        task.ai_channels.ai_max = 5
+#        task.ai_channels.ai_min = -5
+        
+        for key in order:
+        
+            # Configure channel
+            task.ai_channels.add_ai_voltage_chan(
+                    channels[key],
+                    terminal_config=mode,
+                    min_val=-5,
+                    max_val=5)
+        
+        # Set sampling_rate and samples per channel
+        task.timing.cfg_samp_clk_timing(
+                rate=samplerate,
+                samps_per_chan=samples_to_measure)
 
         # Measure
         signal = task.read(
@@ -403,23 +575,21 @@ with nid.Task() as task:
         task.wait_until_done()
         
         # Save measurement
-        nchannels = nchannels + 1
-        print("For {} channels, signal has size {}".format(
-                nchannels,
-                np.size(signal)))
-        time = np.linspace(0, duration, samples_to_measure)
-        try:
-            data = np.zeros((signal[:,0], signal[0,:]+1))
-            data[:,0] = time
-            data[:,1:] = signal
-        except IndexError:
-            data = np.array([time, signal]).T
-        np.savetxt(filename(nchannels), data, header=header)
+        time = np.expand_dims(np.linspace(0, duration, samples_to_measure),
+                              axis=0)
+        
+        data = np.array(signal).T
+        if data.ndim==1:
+            data = np.expand_dims(data, axis=0).T
+
+        data = np.concatenate((time.T, data), axis=1)
+        
+        np.savetxt(filename(order), data,
+                   header=headermaker(order),
+                   footer=footer)
 
 gen.output(False)
 gen.gen.close()
-
-
 
 #%% Libraries for streamers
 from nidaqmx.utils import flatten_channel_string
