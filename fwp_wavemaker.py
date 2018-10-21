@@ -371,8 +371,9 @@ class Wave:
         Returns
         -------
         
-        Evaluated waveform 
+        Evaluated waveform or tuple containing time and evaluated waveform
         '''
+        
         if sampling_rate <1:
             raise ValueError('Sampling rate must be postive integer.')
             
@@ -403,15 +404,79 @@ class MultichannelWave(Wave):
         self.waves = []
         
     def add_channel(self, *args, **kwargs):
+        ''' Adds a channel to the MultichannelWave instance by calling
+        insantiating Wave with the given parameters. See Wave.
+        '''
+        
         self.waves.append(Wave(*args, **kwargs))
         
     def evaluate(self, *args, **kwargs):
+        '''Takes in an array-like object to evaluate the funcion in.
+        
+        The returned array has a channel in each column.
+        
+        Parameters
+        ----------
+        time : array
+            time vector in which to evaluate the funcion
+        args : tuple (optional)
+            extra arguments to be passed to evaluated function
+            
+        Returns
+        -------
+        
+        Array of evaluated waveform 
+        '''   
+        
         signal = [w.evaluate(*args, **kwargs) for w in self.waves]
         return np.array(signal).T
     
-    def evauate_sr(self, *args, **kwargs):
-        signal = [w.evaluate_sr(*args, **kwargs) for w in self.waves]
-        return np.array(signal).T
+    def evaluate_sr(self, *args, **kwargs):
+        '''Evaluates the functions in a time vector with the given sampling rate
+        for given duration or ampunt of samples.
+        
+        User must specify either duration or nsamples, but not both. The 
+        returned array has a channel in each column.
+        
+        Parameters
+        ----------
+        sampling_rate : int
+            time vector in which to evaluate the funcion
+        duration : float (optional)
+            duration of signal. Default = None
+        nsamples : int (optional)
+            amount of samples tu return. Default = None
+        return_time : bool (optional)
+            decides if time vector is returned or not
+        custom_args : tuple (optional)
+            extra arguments to be passed to evaluated function
+            
+        Returns
+        -------
+        
+        Array of evaluated waveforms or tuple containing time and 
+        array of evaluated waveforms
+        '''
+        
+        # Tries to get return_time from kwargs. If it wasn't passed, set default false
+        return_time = kwargs.get('return_time', False)
+        
+        if return_time:
+            time, signal = self.waves[0].evaluate_sr(*args, **kwargs)
+            
+            if len(self.waves) > 1:
+                signal = [signal]
+                kwargs['return_time'] = False
+                signal.extend([w.evaluate_sr(*args, **kwargs) for w in self.waves[1:]])
+                
+                return time, np.array(signal).T
+            
+            else:
+                return time, signal
+            
+        else:
+            signal = [w.evaluate_sr(*args, **kwargs) for w in self.waves]
+            return np.array(signal).T
     
 '''Example:
     
