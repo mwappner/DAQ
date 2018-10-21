@@ -374,7 +374,7 @@ class Wave:
         Evaluated waveform or tuple containing time and evaluated waveform
         '''
         
-        if sampling_rate <1:
+        if sampling_rate < 1:
             raise ValueError('Sampling rate must be postive integer.')
             
         if duration is None:
@@ -491,7 +491,7 @@ class MultichannelWave(Wave):
     signal = mw.evaluate(time)
     plt.plot(time, signal)
     '''
-#%% Fourier series classfor wave generator
+#%% Fourier series class for wave generator
 
 def fourier_switcher(input_waveform):
     """ Switcher to easily choose waveform.
@@ -657,8 +657,8 @@ class Fourier:
         Evaluated fourier partial sum 
         """          
         
-        self.waveform_maker = fourier_switcher(waveform)
-        self._order = order #doesn't call setup_props becaouse there's no frequency defined yet
+        self.waveform = waveform
+        self._order = order #doesn't call setup_props because there's no frequency defined yet
         self.setup_props(frequency)
         self.extra_args = args
         
@@ -668,7 +668,7 @@ class Fourier:
     def setup_props(self, freq):
         '''Sets up frequencyes, amplitudes and wave attributes for given freq.'''
         
-        self.amplitudes, self._frequencies =  self.waveform_maker(self.order, freq)
+        self.amplitudes, self._frequencies =  self._waveform_maker(self.order, freq)
         self.wave = Wave('sum', self._frequencies, self.amplitudes)
 
         
@@ -698,7 +698,22 @@ class Fourier:
         
         self._order = value
         self.setup_props(self.frequency)
-        
+    
+    @property
+    def waveform(self):
+        '''Waveform getter: returns waveform string.'''
+
+        return self._waveform
+    
+    @waveform.setter
+    def waveform(self, value)
+        '''Wavefrorm setter: sets the appropiate waveform_maker and refreshes
+        the amplitude vector.'''
+
+        self._waveform = value
+        self._waveform_maker = fourier_switcher(value)
+        self.setup_props(self.frequency)
+
     def evaluate(self, time):
         """Takes in an array-like object to evaluate the funcion in.
         
@@ -728,3 +743,33 @@ class Fourier:
             
         else:
             return self.wave.evaluate(time)
+
+    def evaluate_sr(self, *args, **kwargs)
+        """Evaluates the function in a time vector with the given sampling rate
+        for given duration or ampunt of samples.
+        
+        User must specify either duration or nsamples, but not both.
+        
+        Parameters
+        ----------
+        sampling_rate : int
+            time vector in which to evaluate the funcion
+        duration : float (optional)
+            duration of signal. Default = None
+        nsamples : int (optional)
+            amount of samples tu return. Default = None
+        return_time : bool (optional)
+            decides if time vector is returned or not
+        custom_args : tuple (optional)
+            extra arguments to be passed to evaluated function
+            
+        Returns
+        -------
+        
+        Evaluated waveform or tuple containing time and evaluated waveform
+        """
+        if self.custom:
+            raise ValueError('No support for custom waves with this method.')
+            
+        else:
+            return self.wave.evaluate_sr(*args, **kwargs)
