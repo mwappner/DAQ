@@ -14,6 +14,12 @@ import os
 import fwp_string as fstr
 from scipy.signal import find_peaks
 
+class Struct:
+    def __init__(self):
+        pass
+    
+    def __repr__(self):
+        return str(vars(self))
 #%% Samplerate_Sweep (by Val)
 """This script analyses a samplerate sweep for a fixed signal.
 
@@ -221,13 +227,18 @@ cual = 10
 archivos = rawfiles_by_sr[samplingrates[cual]]
 
 signal_freqs = {}
-time, data = np.loadtxt(f, unpack=True)
+#time, data = np.loadtxt(f, unpack=True)
 for f in archivos:
     freq = fstr.find_numbers(f)[1]
+    signal_freqs[freq] = Struct()
+    signal_freqs[freq].file = f
+    
     time, data = np.loadtxt(f, unpack=True)
-    signal_freqs[freq] = len(find_peaks(data)[0])/time[-1]
+    signal_freqs[freq].duration = time[-1]
+    signal_freqs[freq].nperiods = len(find_peaks(data)[0])
+    signal_freqs[freq].maybe_freq = len(find_peaks(data)[0])/time[-1]
 
+#to be able to plot with lines, keys must be sorted
 actual_freq = sorted(list(signal_freqs.keys()))
-maybe_freqs = [signal_freqs[k] for k in actual_freq]
 
-plt.plot(actual_freq, maybe_freqs, '-o')
+plt.plot(actual_freq, [signal_freqs[f].maybe_freq for f in actual_freq], '-o')
