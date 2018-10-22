@@ -18,7 +18,7 @@ from time import sleep
 """
 This script makes a voltage measurement.
 
-It measures at differential mode. Then, it applies Fourier 
+It measures in differential mode. Then, it applies Fourier 
 Transformation to get the main frequency and its Fourier intensity. It 
 only plots the data.
 

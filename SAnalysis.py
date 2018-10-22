@@ -11,8 +11,10 @@ import fwp_save as sav
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import fwp_string as fstr
+from scipy.signal import find_peaks
 
-#%% Samplerate_Sweep
+#%% Samplerate_Sweep (by Val)
 """This script analyses a samplerate sweep for a fixed signal.
 
 It makes an animation showing voltage vs time graphs for different 
@@ -69,9 +71,9 @@ animation = fplt.animation_2D(
         fps=10,
         new_figure=False)
 
-#sav.saveanimation(animation,
-#                  os.path.join(folder, 'Video.gif'))
-# This doesn't work and I'm not sure why. It dos work saving it as mp4.
+sav.saveanimation(animation,
+                  os.path.join(folder, 'Video.gif'))
+# This doesn't work and I'm not sure why. It does work saving it as mp4.
 
 samplerate, frequencies, fourier_peak = np.loadtxt(
         os.path.join(folder, 'Data.txt'), 
@@ -88,7 +90,7 @@ plt.ylabel("Amplitud (u.a.)")
 plt.xlabel("Frecuencia de muestreo (Hz)")
 fplt.add_style(linewidth=1)
 
-#%%
+#%% By Val
 
 # PARAMETERS
 
@@ -130,25 +132,28 @@ plt.plot(all_data[3][:,0], all_data[3][:,1:])
 
 
 
-#%% Sample rate + frequency sweep 
+#%% Sample rate + frequency sweep (by Moni)
 name = 'Frequency_Sweep'
 folder = os.path.join(os.getcwd(),
                       'Measurements',
                       name)
 
+#get only flies corresponding to raw data, not their Fourirer transform:
 rawdata=[os.path.join(
-        folder,f) for f in os.listdir(folder) if not f.endswith('Fourier.txt')]
+        folder,f) for f in os.listdir(folder) if not f.endswith('Fourier.txt')].sort()
         
 maxt= []
-sr=[]
-freqgen=[]
+
+sr = [f.split('_')[2] for f in rawdata]
+freqgen = [f.split('_')[5] for f in rawdata]
+
 for f in rawdata:
-        time,data=np.loadtxt(f)
-        np.append(sr,f.split('_')[1])
-        np.append(freqgen,f.split('_')[4])
-        for i in range(len(data)):
-            if data[i]>data[i-1] and data[i]>data[i+1] and data[i]>data[i-2] and data[i]>data[i+2]:
-                np.append(maxt, time[i])
+    time,data=np.loadtxt(f, unpack=True)
+#    np.append(sr,f.split('_')[2])
+#    np.append(freqgen,f.split('_')[5])
+    for i in range(2, len(data)-2):
+        if data[i]>data[i-1] and data[i]>data[i+1] and data[i]>data[i-2] and data[i]>data[i+2]:
+            np.append(maxt, time[i])
 
 
 deltatau=np.zeros(len(maxt)-1)
@@ -165,3 +170,64 @@ plt.ylabel('Frecuencia a mano (Hz)')
 plt.xlabel('Frecuencia gen (Hz)')
 plt.grid()
 plt.show()
+
+#%% by Marcos
+
+name = 'Frequency_Sweep'
+folder = os.path.join(os.getcwd(),
+                      'Measurements',
+                      name)
+
+# Por Fourier:
+fourierfiles = sorted([os.path.join(
+        folder,f) for f in os.listdir(folder) if f.endswith('Fourier.txt')])
+    
+f = fourierfiles[10]
+actual_freq, fourier_freq, fourier_power = np.loadtxt(f, unpack=True)
+#plt.stem(actual_freq, np.ones_like(actual_freq))
+#plt.stem(fourier_freq, fourier_power)
+
+plt.plot(actual_freq, fourier_freq,'-o')
+plt.plot(actual_freq, actual_freq)
+plt.xlabel('Actual frequency [Hz]')
+plt.ylabel('Fourier calculated frequency [Hz]')
+plt.legend(('Datos', 'Pendiente 1'))
+plt.ylim((0, max(fourier_freq) * 1.1))
+plt.title(os.path.basename(f))
+
+#%% Por picos:
+rawfiles = sorted([os.path.join(
+        folder,f) for f in os.listdir(folder) if not f.endswith('Fourier.txt')])
+
+# divide all file names by 
+rawfiles_by_sr = {}
+current_sr = None
+temp = []
+
+for f in rawfiles:
+    this_sr = fstr.find_1st_number(os.path.basename(f))
+    if current_sr == this_sr:
+        temp.append(f)
+    else:
+        if len(temp)!=0:
+            rawfiles_by_sr[current_sr] = temp
+        current_sr = this_sr
+        temp = [f]
+
+# sorted list of sampling rates
+samplingrates = sorted(list(rawfiles_by_sr.keys()))
+
+cual = 10
+archivos = rawfiles_by_sr[samplingrates[cual]]
+
+signal_freqs = {}
+time, data = np.loadtxt(f, unpack=True)
+for f in archivos:
+    freq = fstr.find_numbers(f)[1]
+    time, data = np.loadtxt(f, unpack=True)
+    signal_freqs[freq] = len(find_peaks(data)[0])/time[-1]
+
+actual_freq = sorted(list(signal_freqs.keys()))
+maybe_freqs = [signal_freqs[k] for k in actual_freq]
+
+plt.plot(actual_freq, maybe_freqs, '-o')
