@@ -175,13 +175,22 @@ def add_style(figure_id=None, new_figure=False, **kwargs):
     except IndexError:
         ax = [plt.axes()]
     
-    kwargs_list = ['fontsize', 'linewidth', 'markersize', 'dimensions']
-    kwargs_val = [14, 3, 6, [1.15,1.05,1,1]]
-    for key, val in zip(kwargs_list, kwargs_val):
-        try:
-            kwargs[key]
-        except KeyError:
-            kwargs[key] = val
+    kwargs_default = dict(
+            fontsize=12,
+            linewidth=3,
+            markersize=6,
+            dimensions=[1.15,1.05,1,1],
+            xaxisformat=None,
+            yaxisformat=None)
+    
+    kwargs = {key:kwargs.get(key, value) for key, value in kwargs_default.items()}
+#    kwargs_list = ['fontsize', 'linewidth', 'markersize', 'dimensions']
+#    kwargs_val = [14, 3, 6, [1.15,1.05,1,1]]
+#    for key, val in zip(kwargs_list, kwargs_val):
+#        try:
+#            kwargs[key]
+#        except KeyError:
+#            kwargs[key] = val
     
     rcParams.update({'font.size': kwargs['fontsize']})
     rcParams.update({'lines.linewidth': kwargs['linewidth']})
@@ -193,12 +202,12 @@ def add_style(figure_id=None, new_figure=False, **kwargs):
                         kwargs['dimensions'][2]*box.width,
                         kwargs['dimensions'][3]*box.height])
     
-    kwargs_list = ['xaxisformat', 'yaxisformat']
-    for key in kwargs_list:
-        try:
-            kwargs[key]
-        except KeyError:
-            kwargs[key] = None
+#    kwargs_list = ['xaxisformat', 'yaxisformat']
+#    for key in kwargs_list:
+#        try:
+#            kwargs[key]
+#        except KeyError:
+#            kwargs[key] = None
     
     if kwargs['xaxisformat'] is not None:
         for a in ax:
