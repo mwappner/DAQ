@@ -11,7 +11,7 @@ import fwp_save as sav
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-import fwp_string as fstr
+#import fwp_string as fstr
 from scipy.signal import find_peaks
 
 class Struct:
@@ -170,7 +170,7 @@ freqm=np.mean(deltatau)/2*np.pi
 
 
 plt.figure()
-plt.plot(freq, frequencies, '.')
+plt.plot(freqm, frequencies, '.')
 plt.title('Frecuencias')
 plt.ylabel('Frecuencia a mano (Hz)')
 plt.xlabel('Frecuencia gen (Hz)')
@@ -242,3 +242,53 @@ for f in archivos:
 actual_freq = sorted(list(signal_freqs.keys()))
 
 plt.plot(actual_freq, [signal_freqs[f].maybe_freq for f in actual_freq], '-o')
+
+#%% interbuffer time
+
+name = 'Interbuffer_Time'
+folder = os.path.join(os.getcwd(),
+                      'Measurements',
+                      name)
+                      
+interbuferfile = os.path.join(
+        folder,'Interbuffer_Time.txt')
+
+time, voltage = np.loadtxt(interbuferfile, unpack=True)
+dt=time[5]-time[4]
+
+def Diffincent(u,dx):
+    w=len(u)
+    Diff=np.zeros(w)
+    for i in range(w):
+        if i == 0:
+            Diff[0]=(u[1]-u[w-1])/(2*dx)
+        elif i == w-1:
+            Diff[i]=(u[0]-u[i-1])/(2*dx)
+        else:
+            Diff[i]=(u[i+1]-u[i-1])/(2*dx)
+    return Diff
+
+slopederivative=Diffincent(voltage,dt)
+#%% 
+plt.plot(time[2500:3800], slopederivative[2500:3800],'g-o')
+#plt.plot(time[2500:3800], voltage[2500:3800])
+plt.xlabel('Time')
+plt.ylabel('First derivative of Signal')
+plt.title(os.path.basename(f))
+plt.grid()
+plt.show()
+
+#%% 
+# Make Fourier transformation and get main frequency
+samplerate = 400e3
+fourier = np.abs(np.fft.rfft(voltage)) # Fourier transformation
+fourier_frequencies = np.fft.rfftfreq(len(voltage), d=1./samplerate)
+max_frequency = fourier_frequencies[np.argmax(fourier)]
+
+
+# Plot Fourier
+plt.figure()
+plt.plot(fourier_frequencies[1000:2000], fourier[1000:2000])
+plt.xlabel('Frecuencia (Hz)')
+plt.ylabel('Intensidad de Fourier (ua)')
+plt.title('{}'.format(max_frequency))
