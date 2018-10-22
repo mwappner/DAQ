@@ -278,7 +278,7 @@ def wrong_input_build(input_list):
 #%% Clase que genera ondas
 
 class Wave:
-    '''Generates an object with a single method: evaluate(time).
+    '''A class for generating and evaluating different waveforms.
   
     Attributes
     ----------
@@ -294,6 +294,8 @@ class Wave:
     ----------
     evaluate(time)
         returns evaluated function type
+    evaluate_sr(sr, duration, nsamples)
+        returns evaluated function type
 
     '''
     
@@ -305,9 +307,12 @@ class Wave:
         
         self._frequency = frequency
         self.amplitude = amplitude
-        self.waveform = given_waveform(waveform)
+        self.waveform = waveform
         self.extra_args = args
         
+    def __str__(self):
+        return '{} Wave instance.'.format(self.waveform)
+
     @property
     def frequency(self):
         '''Frequency getter: returns frequency of wave. 
@@ -326,6 +331,18 @@ class Wave:
         '''Frequency setter: sets value as self._frequency.'''
         self._frequency = value    
         
+    @property
+    def waveform(self):
+        '''Waveform getter'''
+        return self._waveform_type
+
+    @waveform.setter
+    def waveform(self, value):
+        '''Wavefor setter'''
+        self._waveform_func = given_waveform(value)
+        self._waveform_type = value
+
+
     def evaluate(self, time, *args):
         '''Takes in an array-like object to evaluate the funcion in.
         
@@ -344,9 +361,9 @@ class Wave:
 
         if isinstance(self.amplitude, (list, tuple, np.ndarray)):
             #for sums 
-            wave = self.waveform(time, self._frequency, self.amplitude)
+            wave = self._waveform_func(time, self._frequency, self.amplitude)
         else:
-            wave = self.waveform(time, self._frequency, *args, self.extra_args) * self.amplitude
+            wave = self._waveform_func(time, self._frequency, *args, self.extra_args) * self.amplitude
         return wave
 
     def evaluate_sr(self, sampling_rate, duration=None, nsamples=None, return_time=False, custom_args=()):
@@ -397,19 +414,76 @@ class Wave:
         else:
             return self.evaluate(time, *custom_args)
 
-#%%
-class MultichannelWave(Wave):
-    
+#%% Waves for many channels
+class MultichannelWave:
+    '''A class for generating and evaluating different waveforms. Supports many
+    waves in a single instance, hence 'multichannel'.
+  
+    Attributes (read only)
+    ----------
+    waveform : str {'sine', 'sawtoothup', 'sawtoothdown', 'ramp', 'triangular', 'square', 'custom'}
+    frequency : float
+        wave frequency
+    amplitude : float
+        wave amplitud
+    nchannels : int
+        number current channels
+        
+    Methods
+    ----------
+    add_channel(waveform, frequency, amplitude)
+        return nothing, adds Wave instance to self.waves
+    evaluate(time)
+        returns evaluated function type
+    evaluate_sr(sr, duration, nsamples)
+        returns evaluated function type
+
+    '''
     def __init__(self):
         self.waves = []
+
+    def __str__(self):
+        return 'MultichannelWave instance with {} channels containing the following waveforms: {}'.format(self.nchannels, self.waveform)
         
     def add_channel(self, *args, **kwargs):
         ''' Adds a channel to the MultichannelWave instance by calling
         insantiating Wave with the given parameters. See Wave.
         '''
-        
+
         self.waves.append(Wave(*args, **kwargs))
+
+    @property
+    def frequency(self):
+        return [w.frequency for w in self.waves]
+
+    @frequency.setter
+    def frequency(self, value):
+        raise ValueError('Frequency should be set for each wave individually. Use self.waves.frequency.')
+    
+    @property
+    def amplitude(self):
+        return [w.amplitude for w in self.waves]
+    
+    @amplitude.setter
+    def amplitude(self, value):
+        raise ValueError('Amplitude should be set for each wave individually. Use self.waves.amplitude.')
+
+    @property
+    def waveform(self):
+        return [w.waveform for w in self.waves]
         
+    @waveform.setter
+    def waveform(self, value):
+        raise ValueError('Waveform should be set for each wave individually. Use self.waves.waveform.')
+
+    @property
+    def nchannels(self):
+        return len(self.waves)
+
+    @nchannels.setter
+    def nchannels(self, value):
+        raise ValueError('nchannels can not be set.')
+
     def evaluate(self, *args, **kwargs):
         '''Takes in an array-like object to evaluate the funcion in.
         
@@ -706,7 +780,7 @@ class Fourier:
         return self._waveform
     
     @waveform.setter
-    def waveform(self, value)
+    def waveform(self, value):
         '''Wavefrorm setter: sets the appropiate waveform_maker and refreshes
         the amplitude vector.'''
 
@@ -744,7 +818,7 @@ class Fourier:
         else:
             return self.wave.evaluate(time)
 
-    def evaluate_sr(self, *args, **kwargs)
+    def evaluate_sr(self, *args, **kwargs):
         """Evaluates the function in a time vector with the given sampling rate
         for given duration or ampunt of samples.
         
