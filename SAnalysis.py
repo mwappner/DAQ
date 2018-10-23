@@ -292,3 +292,85 @@ plt.plot(fourier_frequencies[1000:2000], fourier[1000:2000])
 plt.xlabel('Frecuencia (Hz)')
 plt.ylabel('Intensidad de Fourier (ua)')
 plt.title('{}'.format(max_frequency))
+
+
+#%% Interchanneltime: cargo variables
+
+name = 'Interchannel_Time'
+folder = os.path.join(os.getcwd(),
+                      'Measurements',
+                      name)
+                      
+interchannelfile1 = os.path.join(
+        folder,'NChannels_1.txt')
+time1, voltage1ch1 = np.loadtxt(interchannelfile1, unpack=True)
+
+interchannelfile2 = os.path.join(
+        folder,'NChannels_2.txt')
+time2, voltage2ch1,voltage2ch2 = np.loadtxt(interchannelfile2, unpack=True)
+
+interchannelfile3 = os.path.join(
+        folder,'NChannels_3.txt')
+time3, voltage3ch1,voltage3ch2,voltage3ch3 = np.loadtxt(interchannelfile3, unpack=True)
+
+interchannelfile4 = os.path.join(
+        folder,'NChannels_4.txt')
+time4, voltage4ch1, voltage4ch2, voltage4ch3, voltage4ch4 = np.loadtxt(interchannelfile4, unpack=True)
+
+interchannelfile5 = os.path.join(
+        folder,'NChannels_5.txt')
+time5, voltage5ch1, voltage5ch2, voltage5ch3, voltage5ch4, voltage5ch5 = np.loadtxt(interchannelfile5, unpack=True)
+
+interchannelfile6 = os.path.join(
+        folder,'NChannels_6.txt')
+time6, voltage6ch1, voltage6ch2, voltage6ch3, voltage6ch4, voltage6ch5, voltage6ch6 = np.loadtxt(interchannelfile6, unpack=True)
+
+
+#%% 
+
+plt.plot(time2[1400:1700], voltage2ch1[1400:1700],'r-')
+plt.plot(time2[1400:1700], voltage2ch2[1400:1700],'b-')
+plt.xlabel('Time')
+plt.ylabel('coltage')
+plt.grid()
+plt.show()
+
+#%% prueba 2
+
+name = 'Interchannel_Time'
+folder = os.path.join(os.getcwd(),
+                      'Measurements',
+                      name)
+interchanneltime=[[],[],[],[],[]]
+#I've got 5 files with multiple channel adquisition. I want to see how interchannel value changes.
+for i in range(5):
+    interchannelfile = os.path.join(folder,'NChannels_{}.txt'.format(i+2)) #I choose the corresponding file
+    datos= np.loadtxt(interchannelfile, unpack=True) # I load the file data
+    time=datos[0,:]#first set of values are time
+    voltage = [datos[d, :] for d in range(1, datos.shape[0])] #the rest are the voltages for each channel
+    deltavector=np.zeros_like(voltage)# I create an array to store values of voltage differences
+    interchannelvoltage=np.zeros(len(voltage))#i create array to store mean voltage difference
+    for j in range(len(voltage)): #for each column, that is to say for each channel
+        if j < len(voltage)-1: #if not the las channel
+            deltavector[j,:]=voltage[j+1]-voltage[j]
+        else: #if last channel
+            deltavector[j,:]=voltage[j]-voltage[0]
+        interchannelvoltage[j]=np.mean(deltavector[j,:])#mean voltage difference between channels
+    interchanneltime[i]=interchannelvoltage/(2*10)#I store the values outside loop
+    
+    
+    
+    
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
