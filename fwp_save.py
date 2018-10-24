@@ -364,3 +364,19 @@ def saveanimation(file,
     print('Archivo guardado en {}'.format(file))
     
     return
+
+#%%
+
+def savefile_helper(dirname, filename_template, parent_dir='Measurements', in_cwd=True):
+    
+    if in_cwd:
+        parent_dir = os.path.join(os.getcwd(), parent_dir)
+        
+    save_dir = os.path.join(parent_dir, dirname)
+    save_dir = new_dir(save_dir)
+    
+    def filename_maker(*args):
+        
+        return os.path.join(save_dir, filename_template.format(*args))
+
+    return filename_maker

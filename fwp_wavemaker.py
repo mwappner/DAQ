@@ -427,6 +427,7 @@ class MultichannelWave:
     amplitude : float
         wave amplitud
     nchannels : int
+
         number current channels
         
     Methods
