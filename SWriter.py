@@ -18,6 +18,7 @@ import fwp_wavemaker as wm
 
 #%% Libraries for streamers
 from nidaqmx.utils import flatten_channel_string
+from nidaqmx.types import CtrFreq, CtrTime
 from nidaqmx.stream_readers import AnalogSingleChannelReader, AnalogMultiChannelReader
 from nidaqmx.stream_writers import AnalogSingleChannelWriter, AnalogMultiChannelWriter
 
@@ -36,20 +37,15 @@ samples_to_measure = int(samplerate * duration/1000)
 
 number_of_channels=3
 channels_to_test = [
-                    "Dev20/ai0",
-                    "Dev20/ai1",
-                    "Dev20/ai2",
+                    "Dev20/ao0",
+#                    "Dev20/ao1",
+#                    "Dev20/ao2",
                     ]
 
 signal_slope = signal_pk_amplitude * signal_frequency
 
-folder = os.path.join(os.getcwd(),
-                      'Measurements',
-                      name)
-folder = sav.new_dir(folder)
-filename = lambda nchannels : os.path.join(
-        folder, 
-        'NChannels_{}.txt'.format(nchannels))
+filename = sav.savefile_helper(name, 'NChannels_{}.txt')
+
 header = 'Time [s]\tData [V]'
 
 # ACTIVE CODE
@@ -68,9 +64,10 @@ functionstowrite = seno.evaluate_sr(samplerate, duration=duration)
 
 with nid.Task() as write_task:
         write_task.ao_channels.add_ao_voltage_chan(
-            flatten_channel_string(
-            channels_to_test),
-            max_val=10, min_val=-10)
+                flatten_channel_string(
+                                channels_to_test),
+                max_val=10, min_val=-10)
+                
         writer = AnalogMultiChannelWriter(write_task.out_stream)
         values_to_test = seno
         writer.write_many_sample(values_to_test)
@@ -79,3 +76,12 @@ with nid.Task() as write_task:
         write_task.start()
 # Save measurement
 
+
+#%% PWM
+
+with nid.Task() as task:
+    task.co_channels.add_co_pulse_chan_time('Dev20/ctr0') #pin 38
+    sample = CtrTime(high_time=.001, low_time=.001)
+#    task.co_channels.add_co_pulse_chan_freq('Dev20/ctr0') # pin 38
+#    sample = CtrFreq(duty_cycle=.5, freq=20e3)
+    task.write(sample)
