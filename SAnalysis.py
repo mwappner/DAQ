@@ -358,8 +358,52 @@ for i in range(5):
         interchannelvoltage[j]=np.mean(deltavector[j,:])#mean voltage difference between channels
     interchanneltime[i]=interchannelvoltage/(2*10)#I store the values outside loop
     
-    
-    
+
+
+#%% 
+name = 'Settling_Time'
+folder = os.path.join(os.getcwd(),
+                      'DAQ',
+                      'Measurements',
+                      name)
+                      
+settimefile = os.path.join(
+        folder,'Settling_Time.txt')
+
+time, voltage = np.loadtxt(settimefile, unpack=True)
+#dt=time[5]-time[4]
+#
+#def Diffincent(u,dx):
+#    w=len(u)
+#    Diff=np.zeros(w)
+#    for i in range(w):
+#        if i == 0:
+#            Diff[0]=(u[1]-u[w-1])/(2*dx)
+#        elif i == w-1:
+#            Diff[i]=(u[0]-u[i-1])/(2*dx)
+#        else:
+#            Diff[i]=(u[i+1]-u[i-1])/(2*dx)
+#    return Diff
+#
+#slopederivative=Diffincent(voltage,dt)
+#%% 
+a=65350
+b=85250
+timezoom=time[a:b]
+voltagezoom=voltage[a:b]
+plt.plot(timezoom, voltagezoom,'g')
+plt.xlabel('Time')
+plt.ylabel('voltage')
+plt.grid()
+plt.show()
+
+#%% 
+def step_info(t,yout):
+    print "Overshoot: %f%s"%((yout.max()/yout[-1]-1)*100,'%')
+    print "Rise Time: %fs"%(t[next(i for i in range(0,len(yout)-1) if yout[i]>yout[-1]*.90)]-t[0])
+    print "Settling Time: %fs"%(t[next(len(yout)-i for i in range(2,len(yout)-1) if abs(yout[-i]/yout[-1])>1.02)]-t[0])
+
+step_info(timezoom,voltagezoom)    
     
 
     
