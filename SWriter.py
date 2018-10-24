@@ -37,8 +37,8 @@ samples_to_measure = int(samplerate * duration/1000)
 
 number_of_channels=3
 channels_to_test = [
-                    "Dev20/ao0",
-#                    "Dev20/ao1",
+#                    "Dev20/ao0",
+                    "Dev20/ao1",
 #                    "Dev20/ao2",
                     ]
 
@@ -60,7 +60,7 @@ write to each channel. The order of the channels in the array corresponds to the
 which you add the channels to the task.
 
 '''
-functionstowrite = seno.evaluate_sr(samplerate, duration=duration)
+functionstowrite = seno.evaluate_sr(samplerate, duration=duration).T
 
 with nid.Task() as write_task:
         write_task.ao_channels.add_ao_voltage_chan(
@@ -69,7 +69,7 @@ with nid.Task() as write_task:
                 max_val=10, min_val=-10)
                 
         writer = AnalogMultiChannelWriter(write_task.out_stream)
-        values_to_test = seno
+        values_to_test = functionstowrite
         writer.write_many_sample(values_to_test)
         # Start the read and write tasks before starting the sample clock
         # source task.
@@ -80,8 +80,9 @@ with nid.Task() as write_task:
 #%% PWM
 
 with nid.Task() as task:
-    task.co_channels.add_co_pulse_chan_time('Dev20/ctr0') #pin 38
-    sample = CtrTime(high_time=.001, low_time=.001)
-#    task.co_channels.add_co_pulse_chan_freq('Dev20/ctr0') # pin 38
-#    sample = CtrFreq(duty_cycle=.5, freq=20e3)
+#    task.co_channels.add_co_pulse_chan_time('Dev20/ctr0') #pin 38
+#    sample = CtrTime(high_time=.001, low_time=.001)
+#    sample = CtrTime()
+    task.co_channels.add_co_pulse_chan_freq('Dev20/ctr0') # pin 38
+    sample = CtrFreq(duty_cycle=.5, freq=20e3)
     task.write(sample)
