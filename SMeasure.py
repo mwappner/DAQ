@@ -18,7 +18,7 @@ from time import sleep
 """
 This script makes a voltage measurement.
 
-It measures in differential mode. Then, it applies Fourier 
+It measures in NRSE mode. Then, it applies Fourier 
 Transformation to get the main frequency and its Fourier intensity. It 
 only plots the data.
 
@@ -604,7 +604,7 @@ signal_frequency = 10
 signal_pk_amplitude = 2
 periods_to_measure = 50
 gen_port = 'ASRL1::INSTR'
-gen_totalchannels = 2
+gen_totalchannels = 2 # Ojo que no siempre hay dos canales
 
 name = 'Multichannel_Settling_Time'
 
@@ -618,16 +618,19 @@ channels_to_test = ["Dev20/ai0",
                     "Dev20/ai2",
                     ]
 
-en = ins.Gen(port=gen_port, nchannels=gen_totalchannels)
+gen = ins.Gen(port=gen_port, nchannels=gen_totalchannels)
 signal_slope = signal_pk_amplitude * signal_frequency
 
-folder = os.path.join(os.getcwd(),
-                      'Measurements',
-                      name)
-folder = sav.new_dir(folder)
-filename = lambda nchannels : os.path.join(
-        folder, 
-        'NChannels_{}.txt'.format(nchannels))
+#folder = os.path.join(os.getcwd(),
+#                      'Measurements',
+#                      name)
+#folder = sav.new_dir(folder)
+#filename = lambda nchannels : os.path.join(
+#        folder, 
+#        'NChannels_{}.txt'.format(nchannels))
+filename = sav.savefile_helper(dirname = name, 
+                               filename_template = 'NChannels_{}.txt')
+
 header = 'Time [s]\tData [V]'
 
 # ACTIVE CODE
@@ -639,8 +642,7 @@ gen.output(True, waveform='ramp100',
 with nid.Task() as read_task:
 
     read_task.ai_channels.add_ai_voltage_chan(
-        flatten_channel_string(
-            channels_to_test),
+        flatten_channel_string(channels_to_test),
         max_val=10, min_val=-10)
     reader = AnalogMultiChannelReader(read_task.in_stream)
 
