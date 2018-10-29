@@ -439,3 +439,37 @@ def retrieve_footer(file, comment_marker='#'):
         return last_line
     else:
         raise ValueError("No footer found. Sorry!")
+
+#%%
+
+def retrieve_header(file, comment_marker='#'):
+    """Retrieves the header of a .txt file saved with np.savetxt.
+    
+    Parameters
+    ----------
+    file : str
+        File's root (must include directory and termination).
+    comment_marker='#' : str, optional
+        Sign that indicates a line is a comment on np.savetxt.
+    
+    Returns
+    -------
+    last_line : str
+        File's header
+    
+    Raises
+    ------
+    ValueError : "Header not found. Sorry!"
+        When the first line doesn't begin with 'comment_marker'.
+    """
+    
+    
+    with open(file, 'r') as f:
+        for line in f:
+            first_line = line
+            break
+    
+    if first_line[0] == comment_marker:
+        return first_line
+    else:
+        raise ValueError("No header found. Sorry!")
