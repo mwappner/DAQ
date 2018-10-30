@@ -1,13 +1,17 @@
 https://media.readthedocs.org/pdf/nidaqmx-python/latest/nidaqmx-python.pdf
+#documentación de nidaqmx, la mejorcita en pdf
 
 https://github.com/ni/nidaqmx-python/
+#el github de nidaqmx, que tiene una carpetita de ejemplos
 
 https://nidaqmx-python.readthedocs.io/en/latest/index.html
+#documentación online de nidaqmx (el buscador anda mal)
 
 http://wiki.freepascal.org/NI-DAQmx_and_NI-DAQmx_Base_examples#ANALOG_INPUTS.2FOUTPUTS
 (ejemplos comentados :D)
 
 https://github.com/ni/nidaqmx-python/blob/master/nidaqmx/tests/test_stream_analog_readers_writers.py
+#ejemplo especifico de stream writers/readers del github anterior
 
 http://www.ni.com/pdf/manuals/375196d.pdf
-
+#manual de la DAQ que estamos usando con especificaciones electrónicas
