@@ -21,6 +21,7 @@ import matplotlib.pyplot as plt
 from math import sqrt
 import numpy as np
 from scipy.optimize import curve_fit
+from scipy.signal import find_peaks
 
 #%%
 
@@ -657,3 +658,49 @@ def single_extreme(X, mode='min'):
                 X = max(X[i] for i in range(len(X)))
             except:
                 return X
+            
+#%% Distance between peaks
+                
+def peak_separation(signal, time=1, *args, **kwargs):
+    '''Calculates mean peak separation.
+    
+    Parameters
+    ----------
+    signal : array-like
+        Signal to evaluates peaks on
+    time : scalar or array-like
+        If scalar, it should indicate time step. If array-like, 
+        should be same lenght as signal and correspond to time 
+        of measurements.
+
+    Other parameters
+    ----------------
+    Parameters passed to scipy.signal.find_peaks.
+        height
+        threshold
+        distance
+        prominence
+        width
+        wlen
+        rel_height
+    
+    Returns
+    -------
+    string : str
+        Written answer.
+    
+    See also: scipy.signal.find_peaks
+    
+    '''
+        
+    peaks = find_peaks(signal, *args, **kwargs)[0]
+    
+    if isinstance(time, (list, tuple, np.ndarray)):
+        if not len(signal)==len(time):
+            raise ValueError('Time and signal must be same lenght.')
+            
+        peak_times = time[peaks]
+    else:
+        peak_times = peaks * time
+        
+    return np.mean(peak_times)
