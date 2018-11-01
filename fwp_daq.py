@@ -11,6 +11,7 @@ import nidaqmx as nid
 #import nidaqmx.stream_readers as sr
 #import nidaqmx.stream_writers as sw
 import nidaqmx.system as sys
+import nidaqmx.constants.TerminalConfiguration as conf
 #from matplotlib import pyplot as plt
 #import time
 
@@ -38,6 +39,140 @@ def devices():
         print(dev)
     
     return devices
+
+#%%
+
+def dynamic_list(inlist):
+    
+    if len(inlist) == 0:
+        raise TypeError('Empty list!')
+    if len(inlist) == 1:
+        return inlist[0]
+    else:
+        return inlist
+
+#%%
+
+class Task:
+    
+    def __init__(self, device):
+        
+        self.__device = device
+        self.__task = nid.Task()
+        self._analog_inputs = None
+        self._pwm_outputs = None
+    
+    @property
+    def analog_inputs(self):
+        return self.analog_inputs
+    
+    @analog_inputs.setter
+    def analog_inputs(self, pins):
+        
+        self.analog_inputs = AnalogInputs(
+                pins=pins,
+                device=self.__device,
+                task=self.__task,
+                )
+
+    
+#%%
+
+class AnalogInputs:
+
+    def init(self, pins=None, device=None, task=None, 
+             voltage_range=[-10, 10], 
+             configuration=conf.NRSE):
+
+        """Initializes analog input channel/s.
+        
+        Parameters
+        ----------
+        device : str
+            NI device's name where analog input channel/s should be put.
+        pins : int, list
+            Device's pins to initialize as analog input channel/s.
+        voltage_range=[-10,10] : list
+            Range of the analog input channel/s. Each of them should be a 
+            list or tuple that contains minimum and maximum in V.
+        configuration=NRSE : nid.constants.TerminalConfiguration, optional
+            Analog input channel/s terminal configuration.
+        
+        Returns
+        -------
+        ai_channels : list, nid.task.ai_channels.add_ai_voltage_chan
+            Analog input channel/s object/s.
+        
+        """          
+        
+        self.__device = device
+        self.__task = task
+        self.__pins = pins
+        
+        if pins is None:
+            raise ValueError("Can't initialize AnalogInputs without pins")
+        
+        self.channels = self.__channels__(pins)
+        self.nchannels = len(self.channels)
+    
+        if not isinstance(voltage_range, list):
+            voltage_range = [voltage_range for ch in self.channels]
+        elif len(voltage_range) != self.nchannels:
+            raise ValueError("Not enough elements in voltage_range")
+        self.range = voltage_range
+        
+        if not isinstance(configuration, list):
+            configuration = [configuration for ch in self.channels]
+        elif len(configuration) != self.nchannels:
+            raise ValueError("Not enough elements in voltage_range")
+        self.configuration = configuration
+        
+        ai_channels = []
+        for i, ch in enumerate(self.channels):
+            ai_channels.append(
+                self.__task.ai_channels.add_ai_voltage_chan(
+                    physical_channel = ch,
+                    min_val = voltage_range[i][0],
+                    max_val = voltage_range[i][1],
+                    units = nid.constants.VoltageUnits.VOLTS
+                    )
+                )
+            ai_channels[i].ai_term_cfg = configuration[i]
+    
+        self.__channels = dynamic_list(ai_channels)
+        
+        return dynamic_list(ai_channels)    
+    
+    def __channels__(self, pins):
+        
+        """Transforms from pin to analog input channel.
+        
+        Parameters
+        ----------
+        pins : int, list
+            Pins to be initialized. Each of them should be 
+            an int from 0 to 15.
+        
+        Returns
+        -------
+        channels : str, list
+            Channels
+        """
+        
+        reference = [15, 17, 19, 21, 24, 26, 29, 31, 
+                     16, 18, 20, 22, 25, 27, 30, 32]
+        
+        channels = []
+        for p in pins:
+            try:
+                p = reference[p]
+                p = '{}/ai{}'.format(self.device, p)
+            except IndexError:
+                message = "Wrong pin {} for analog input"
+                raise ValueError(message.format(p))
+            channels.append(p)
+        
+        return dynamic_list(channels)
 
 #%%
 
