@@ -11,6 +11,8 @@ import fwp_save as sav
 import matplotlib.pyplot as plt
 import os
 import nidaqmx as nid
+from nidaqmx.utils import flatten_channel_string
+import nidaqmx.stream_readers as sread
 import numpy as np
 from time import sleep
 
@@ -600,47 +602,45 @@ for order in channels_order:
 gen.output(False)
 gen.gen.close()
 
-#%% Libraries for streamers
-from nidaqmx.utils import flatten_channel_string
-from nidaqmx.stream_readers import (AnalogSingleChannelReader, AnalogMultiChannelReader)
-#from nidaqmx.stream_writers import (AnalogSingleChannelWriter, AnalogMultiChannelWriter)
+#%% Sream_Readers (pag 57)
+#nidaqmx.stream_readers AnalogSingleChannelReader, AnalogMultiChannelReader
+#nidaqmx.stream_writers AnalogSingleChannelWriter, AnalogMultiChannelWriter
+"""Designed to determine interchannel time using Stream Readers.
 
-#%% streamers (pag 57)
+It measures on certain channels a ramp using nidaqmx.stream_readers. 
+Then, it saves it according to the amount of channels.
+
+"""
+
+# PASIVE CODE
+
+# Main parameters
+name = 'SReaders_Multichannel_Time'
+
 samplerate = 400e3
 mode = nid.constants.TerminalConfiguration.NRSE
 
 signal_frequency = 10
 signal_pk_amplitude = 2
 periods_to_measure = 50
+
 gen_port = 'ASRL1::INSTR'
 gen_totalchannels = 2 # Ojo que no siempre hay dos canales
-
-name = 'Multichannel_Settling_Time'
 
 # Other parameters
 duration = periods_to_measure/signal_frequency
 samples_to_measure = int(samplerate * duration/1000)
 
 number_of_channels=3
-channels_to_test = [
-                    "Dev20/ai0",
+channels_to_test = ["Dev20/ai0",
                     "Dev20/ai1",
-                    "Dev20/ai2",
-                    ]
+                    "Dev20/ai2"]
 
 gen = ins.Gen(port=gen_port, nchannels=gen_totalchannels)
 signal_slope = signal_pk_amplitude * signal_frequency
 
-#folder = os.path.join(os.getcwd(),
-#                      'Measurements',
-#                      name)
-#folder = sav.new_dir(folder)
-#filename = lambda nchannels : os.path.join(
-#        folder, 
-#        'NChannels_{}.txt'.format(nchannels))
 filename = sav.savefile_helper(dirname = name, 
                                filename_template = 'NChannels_{}.txt')
-
 header = 'Time [s]\tData [V]'
 
 # ACTIVE CODE
@@ -651,28 +651,28 @@ gen.output(True, waveform='ramp100',
 
 with nid.Task() as read_task:
 
+    # Channels configuration
     read_task.ai_channels.add_ai_voltage_chan(
         flatten_channel_string(channels_to_test),
         max_val=10, min_val=-10)
-    reader = AnalogMultiChannelReader(read_task.in_stream)
 
-    # Start the read and write tasks before starting the sample clock
-    # source task.
-    read_task.start()
-
+    # Measurement configuration
+    reader = sread.AnalogMultiChannelReader(read_task.in_stream)
     values_read = np.zeros(
-        (number_of_channels, samples_to_measure), dtype=np.float64)
+        (number_of_channels, samples_to_measure), 
+        dtype=np.float64)
+    
+    # Make measurement
+    read_task.start()
     reader.read_many_sample(
-        values_read, number_of_samples_per_channel=samples_to_measure,
+        values_read, 
+        number_of_samples_per_channel=samples_to_measure,
         timeout=2)
 
     #np.testing.assert_allclose(values_read, rtol=0.05, atol=0.005)
+    
 # Save measurement
-
 nchannels = nchannels + 1
-print("For {} channels, signal has size {}".format(
-        nchannels,
-        np.size(signal)))
 time = np.linspace(0, duration, samples_to_measure)
 try:
     data = np.zeros((values_read[0,:], values_read[:,0]+1))
@@ -684,5 +684,6 @@ except IndexError:
     data = np.array([time, signal]).T
 np.savetxt(filename(nchannels), data, header=header)
 
+# Turn off and close communication
 gen.output(False)
 gen.gen.close()
