@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Spyder Editor
-
-This is a temporary script file.
+Taken from https://github.com/fotonicaOrg/daq commit 387c7c3
 """
 import numpy as np
 import nidaqmx
