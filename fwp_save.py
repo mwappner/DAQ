@@ -199,7 +199,8 @@ def savetxt(file, datanumpylike, overwrite=False, header='', footer=''):
         But footer could also be one string.
     footer='' : dict, str, optional
         Data's specifications. Its elements and keys should be str. 
-        But footer could also be one string.
+        But footer could also be one string. Otherwise, an element 
+        could be a tuple containing value and units; i.e.: (100, 'Hz').
     
     Return
     ------
