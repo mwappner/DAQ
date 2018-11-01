@@ -13,7 +13,7 @@ free_file : function
     Returns a name for a new file to avoid overwriting.
 saveplot : function
     Saves a matplotlib.pyplot plot on an image file (i.e: 'png').
-savetext : function
+savetxt : function
     Saves some np.array like data on a '.txt' file.
 savewav : function
     Saves a PyAudio encoded audio on a '.wav' file.
@@ -24,6 +24,7 @@ saveanimation : function
 @date: 09-17-2018
 """
 
+import fwp_string as fst
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -175,7 +176,7 @@ def saveplot(file, overwrite=False):
 
 #%%
 
-def savetext(file, datanumpylike, overwrite=False, header=''):
+def savetxt(file, datanumpylike, overwrite=False, header='', footer=''):
     
     """Takes some array-like data and saves it on a '.txt' file.
     
@@ -191,10 +192,15 @@ def savetext(file, datanumpylike, overwrite=False, header=''):
         The name you wish (must include full path and extension)
     datanumpylike : array, list
         The data to be saved.
-    overwrite=False : bool
+    overwrite=False : bool, optional
         Indicates whether to overwrite or not.
-    header='' : list
+    header='' : list, str, optional
         Data's descriptor. Its elements should be str, one per column.
+        But footer could also be one string.
+    footer='' : dict, str, optional
+        Data's specifications. Its elements and keys should be str. 
+        But footer could also be one string. Otherwise, an element 
+        could be a tuple containing value and units; i.e.: (100, 'Hz').
     
     Return
     ------
@@ -215,7 +221,25 @@ def savetext(file, datanumpylike, overwrite=False, header=''):
         os.makedirs(base)
     
     if header != '':
-        header = '\t'.join(header)
+        if not isinstance(header, str):
+            try:
+                header = '\t'.join(header)
+            except:
+                TypeError('Header should be a list or a string')
+
+    if footer != '':
+        if not isinstance(footer, str):
+            try:
+                aux = []
+                for key, value in footer.items():
+                    if isinstance(value, tuple) and len(value) == 2:
+                        condition = isinstance(value[0], str)
+                        if not condition and isinstance(value[1], str):
+                            value = "'{} {}'".format(*value)
+                    aux.append('{}={}'.format(key, value) + ', ')
+                footer = aux
+            except:
+                TypeError('Header should be a dict or a string')
 
     file = os.path.join(
             base,
@@ -226,7 +250,7 @@ def savetext(file, datanumpylike, overwrite=False, header=''):
         file = free_file(file)
         
     np.savetxt(file, np.array(datanumpylike), 
-               delimiter='\t', newline='\n', header=header)
+               delimiter='\t', newline='\n', header=header, footer=footer)
     
     print('Archivo guardado en {}'.format(file))
     
@@ -240,6 +264,7 @@ def savewav(file,
             data_format=pyaudio.paFloat32,
             data_samplerate=44100,
             overwrite=False):
+    
     """Takes a PyAudio byte stream and saves it on a '.wav' file.
     
     Takes a PyAudio byte stream and saves it on a '.wav' file. It 
@@ -312,6 +337,7 @@ def saveanimation(file,
                   animation,
                   frames_per_second=30,
                   overwrite=False):
+    
     """Saves a matplotlib.animation object as '.gif' or '.mp4'.
     
     Variables
@@ -371,6 +397,7 @@ def savefile_helper(folder,
                     filename_template, 
                     parent_folder='Measurements', 
                     parent_folder_in_cwd=True):
+    
     """Defines a function that creates filenames from a template.
     
     Parameters
@@ -421,13 +448,18 @@ def retrieve_footer(file, comment_marker='#'):
     
     Returns
     -------
-    last_line : str
+    last_line : str, dict
         File's footer
     
     Raises
     ------
     ValueError : "Footer not found. Sorry!"
         When the last line doesn't begin with 'comment_marker'.
+        
+    See Also
+    --------
+    fwp_save.savetxt
+    
     """
     
     
@@ -436,7 +468,27 @@ def retrieve_footer(file, comment_marker='#'):
             last_line = line
     
     if last_line[0] == comment_marker:
-        return last_line
+        try:
+            last_line = last_line.split(comment_marker + ' ')[-1]
+            footer = eval('dict({})'.format(last_line))
+            for key, value in footer.items():
+                try:
+                    number = fst.find_numbers(value)
+                    if len(number) == 1:
+                        number = number[0]
+                        if len(value.split(' ')) == 2:
+                            footer[key] = (
+                                number, 
+                                value.split(' ')[-1]
+                                )
+                        else:
+                            footer[key] = number
+                except TypeError:
+                    value = value
+        except:
+            footer = last_line
+        return footer
+        
     else:
         raise ValueError("No footer found. Sorry!")
 
@@ -454,13 +506,18 @@ def retrieve_header(file, comment_marker='#'):
     
     Returns
     -------
-    last_line : str
+    last_line : str, list
         File's header
     
     Raises
     ------
     ValueError : "Header not found. Sorry!"
         When the first line doesn't begin with 'comment_marker'.
+    
+    See Also
+    --------
+    fwp_save.savetxt
+    
     """
     
     
@@ -470,6 +527,12 @@ def retrieve_header(file, comment_marker='#'):
             break
     
     if first_line[0] == comment_marker:
-        return first_line
+        header = first_line.split(comment_marker + ' ')[-1]
+        header = header.split('\t')
+        if len(header) > 1:
+            return header
+        else:
+            return header[0]
+        
     else:
         raise ValueError("No header found. Sorry!")

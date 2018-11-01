@@ -18,6 +18,7 @@ from tkinter import Tk
 #%%
 
 def copy(string):
+    
     """Copies a string to the clipboard.
     
     Parameters
@@ -44,6 +45,7 @@ def copy(string):
 
 def error_value(X, dX, error_digits=1, units='',
                 string_scale=True, one_point_scale=False, legend=False):
+    
     """Rounds up value and error of a measure. Also makes a latex string.
     
     This function takes a measure and its error as input. Then, it 
@@ -178,24 +180,42 @@ def error_value(X, dX, error_digits=1, units='',
 
 #%%
 
-def resistance(value, porcentual_error, extra_digits, min_division, 
-               error_digits=2, units=r'$\Omega$', number_return=False):
+def multimeter_error(value, porcentual_error, extra_digits, resolution):
+    """Returns absolute error of a multimeter's measurement.
+    
+    Parameters
+    ----------
+    value : int, float
+        Measurement's value on certain units.
+    porcentual_error : int, float, {0 < porcentual_error < 100}
+        Measurement scale's porcentual error, as stated at 
+        multimeter's manual; i.e.: '(0.5% + 3d)' at 200 Ohm scale
+        with resolution .1 Ohm means 'porcentual_error=0.5'.
+    extra_digits : int
+        Measurement scale's added digits, as stated at 
+        multimeter's manual; i.e. '(0.5% + 3d)' at 200 Ohm scale
+        with resolution .1 Ohm means 'extra_digits=3'.
+    resolution : int, float
+        Measurement scale's resolution on value's units; i.e. 
+        '(0.5% + 3d)' at 200 Ohm scale with resolution .1 Ohm
+        means 'resolution=0.1' if I want the error of 143.7 Ohm
+        and I want to run 'multimeter_error(value=143.7)'.
+    
+    Returns
+    -------
+    error : int, float
+        Measurement's absolute error.
+    """
         
     error = porcentual_error * value / 100
-    error = error + extra_digits * min_division
+    error = error + extra_digits * resolution
     
-    latex = error_value(value, error,
-                        error_digits=error_digits,
-                        units=units, string_scale=True)
-    
-    if number_return:
-        return value, error
-    else:
-        return latex
+    return error
 
 #%%
 
 def find_numbers(string):
+    
     """Returns a list of numbers found on a given string
     
     Parameters
@@ -229,6 +249,7 @@ def find_numbers(string):
     return numbers
 
 def find_1st_number(string):
+    
     """Returns the first float or int number of a string
     
     Parameters
@@ -255,6 +276,7 @@ def find_1st_number(string):
 #%%
 
 def counting_sufix(number):
+    
     """Returns a number's suffix string to use for counting.
     
     Parameters
