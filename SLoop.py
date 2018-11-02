@@ -192,3 +192,23 @@ with nid.Task() as write_task, nid.Task() as read_task:
 #except IndexError:
 #    data = np.array([time, signal]).T
 #np.savetxt(filename(nchannels), data, header=header)
+
+#%% With new module!!! Change PWM mean value
+
+pwm_pin = 0 # Clock output
+pwm_frequency = 100
+pwm_duty_cycle = np.linspace(.1,1,10)
+
+with daq.Task() as task:
+    
+    # Configure clock output
+    task.pwm_outputs(pwm_pin)
+    task.pwm_outputs(pwm_pin).frequency = pwm_frequency
+    task.pwm_outputs(pwm_pin).duty_cycle = pwm_duty_cycle    
+    
+    task.pwm_outputs(pwm_pin).state = True
+    for dc in pwm_duty_cycle:
+        task.pwm_outputs(pwm_pin).duty_cycle = dc
+        print("Hope I changed duty cycle to {:.2f} x'D".format(dc))
+        sleep(3)
+    task.pwm_outputs(pwm_pin).state = False
