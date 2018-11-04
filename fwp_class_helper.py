@@ -252,9 +252,6 @@ class MyClass:
     def prop(self, value):
         return self._prop
         
-    def __get_attr__(self, name):
-        return eval('self.{}'.format(name))
-        
     def sub_method(self, item):
         return item * self.sub_prop
     
@@ -279,9 +276,6 @@ class SupraMyClass(MyClass):
         @prop.setter
         def prop(self, value):
             return self._prop
-            
-        def __get_attr__(self, name):
-            return eval('self.{}'.format(name))
             
         def sub_method(self, item):
             return item * self.sub_prop
@@ -311,32 +305,26 @@ class SupraMyClass(MyClass):
     
     """
     
+
     def __init__(self, alist):
         
-        self.__list__ = alist
+        self.mylist = alist
     
-#    @property
-#    def mylist(self):
-#        return self.__list__
-#    
-#    @mylist.setter
-#    def mylist(self, value):
-#        self.__list__ = value
+    @property
+    def mylist(self):
+        return self.__list__
+    
+    @mylist.setter
+    def mylist(self, value):
+        self.__list__ = value
     
     def __getattr__(self, name):
         
         result = []
-        for l in self.__list__:
+        for l in self.mylist:
             result.append(eval('l.{}'.format(name)))
         return result
     
 #    def __setattr__(self, name, value):
-#            
-#        if not isinstance(value, list):
-#        if not isinstance(value, list):
-#            command = '[l.prop for l in Z.__list__]'.format(name)
-#            command = command + '=[value for l in Z.__list__]'
-#            eval(command)
-##            eval('self.{} = [value for l in self.mylist]'.format(name))
-#        else:
-#            eval('self.{} = value'.format(name))
+#        
+#        eval('self.{} = value'.format(name))
