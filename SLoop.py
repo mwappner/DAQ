@@ -6,8 +6,9 @@ This script is to make measurements with a National Instruments DAQ.
 """
 
 #import fwp_analysis as anly
+import fwp_daq as daq
 import fwp_save as sav
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 #import os
 import nidaqmx as nid
 from nidaqmx import stream_readers as sr
@@ -17,72 +18,7 @@ import numpy as np
 from time import sleep
 import fwp_wavemaker as wm
 
-#%% Stolen code :P
-"""Taken from 
-https://github.com/fotonicaOrg/daq/blob/master/main_temperatura.py
-
-Slightly modified
-"""
-
-import daq
-
-co_channels = ('Dev1/ctr0') # Clock output
-pwm_freq = 100
-pwm_duty_cycle = 0.5
-
-ai_channels = ('Dev1/ai0') # Analog input
-mode = nid.constants.TerminalConfiguration.RSE
-voltage_range = [[-10,10]]
-n_samples = 100
-freq = 100e3
-
-with nid.Task() as task_ai, nid.Task() as task_co:
-    
-    # Configure analog input
-    daq.configure_ai(
-            task_ai,
-            physical_channels = ai_channels,
-            voltage_range = voltage_range,
-            terminal_configuration = mode
-            )
-    
-    # Configure clock output
-    channels_co = daq.configure_pwm(
-            task_co,
-            physical_channels = co_channels,
-            frequency = pwm_freq,
-            duty_cycle = pwm_duty_cycle
-            )
-    
-    # Set contiuous PWM signal
-    task_co.timing.cfg_implicit_timing(
-            sample_mode = nid.constants.AcquisitionType.CONTINUOUS)
-    
-    # Create a PWM stream
-    stream_co = sw.CounterWriter(task_co.out_stream)
-
-    # Measure
-    task_co.start()
-    (data, samplerate) = daq.continuous_acquire(
-                task = task_ai,
-                n_samples = n_samples,
-                sample_frequency = freq,
-                task_co = task_co,
-                stream_co = stream_co,
-                chan_co = channels_co[0]
-                )
-
-time = np.arange(data.size) / samplerate
-
-plt.figure()
-plt.plot(time, data[0,:])
-plt.xlabel('Tiempo (s)')
-plt.ylabel('Tensión registrada (V)')
-plt.grid()
-
 #%% Just turn on a PWM signal
-
-import daq
 
 pwm_channels = 'Dev1/ctr0' # Clock output
 pwm_frequency = 100
@@ -91,7 +27,7 @@ pwm_duty_cycle = .5
 with nid.Task() as task_co:
     
     # Configure clock output
-    channels_co = daq.pwm_output_channels(
+    channels_co = daq.pwm_outputs(
             task_co,
             physical_channels = pwm_channels,
             frequency = pwm_frequency,
@@ -109,10 +45,7 @@ with nid.Task() as task_co:
     task_co.start()
     sleep(10)
 
-
 #%% Change PWM mean value
-
-import daq
 
 pwm_channels = 'Dev1/ctr0' # Clock output
 pwm_frequency = 100
@@ -121,7 +54,7 @@ pwm_duty_cycle = np.linspace(.1,1,10)
 with nid.Task() as task_co:
     
     # Configure clock output
-    channels_co = daq.pwm_output_channels(
+    channels_co = daq.pwm_outputs(
             task_co,
             physical_channels = pwm_channels,
             frequency = pwm_frequency,
@@ -148,35 +81,6 @@ with nid.Task() as task_co:
         print("Hope I changed duty cycle to {:.2f} x'D".format(dc))
         sleep(3)
     task_co.stop()
-
-#%% Try to change PWM mean value inside a task
-
-import daq
-
-co_channels = ('Dev1/ctr0') # Clock output
-pwm_frequency = 100
-pwm_duty_cycle = np.linspace(0,1,10)
-
-with nid.Task() as task_co:
-    
-    # Configure clock output
-    channels_co = daq.configure_pwm(
-            task_co,
-            physical_channels = co_channels,
-            frequency = pwm_frequency,
-            duty_cycle = pwm_duty_cycle
-            )
-    
-    # Set contiuous PWM signal
-    task_co.timing.cfg_implicit_timing(
-            sample_mode = nid.constants.AcquisitionType.CONTINUOUS)
-    
-    # Create a PWM stream
-    stream_co = sw.CounterWriter(task_co.out_stream)
-
-    # Play    
-    task_co.start()
-    sleep(20)
 
 #%% Moni's Voltage Control Loop --> streamers (pag 57)
 
@@ -288,3 +192,23 @@ with nid.Task() as write_task, nid.Task() as read_task:
 #except IndexError:
 #    data = np.array([time, signal]).T
 #np.savetxt(filename(nchannels), data, header=header)
+
+#%% With new module!!! Change PWM mean value
+
+pwm_pin = 0 # Clock output
+pwm_frequency = 100
+pwm_duty_cycle = np.linspace(.1,1,10)
+
+with daq.Task() as task:
+    
+    # Configure clock output
+    task.pwm_outputs(pwm_pin)
+    task.pwm_outputs(pwm_pin).frequency = pwm_frequency
+    task.pwm_outputs(pwm_pin).duty_cycle = pwm_duty_cycle    
+    
+    task.pwm_outputs(pwm_pin).state = True
+    for dc in pwm_duty_cycle:
+        task.pwm_outputs(pwm_pin).duty_cycle = dc
+        print("Hope I changed duty cycle to {:.2f} x'D".format(dc))
+        sleep(3)
+    task.pwm_outputs(pwm_pin).state = False
