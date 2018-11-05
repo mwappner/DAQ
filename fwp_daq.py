@@ -65,14 +65,22 @@ class DAQ:
     def __init__(self, device, print_messages=False):
         
         self.__device = device
-        self.__rtask = Task(self.device)
-        self.__wtask = Task(self.device)
+        self.__pins = DynamicDic()
+        self.writer()
+        self.reader()
+        
+        self.__rtask = Task(self.device,
+                            self.reader,
+                            False,
+                            print_messages)
+        self.__wtask = Task(self.device,
+                            self.writer,
+                            True,
+                            print_messages)
         
         self.__analog_inputs = DynamicDic()
         self.__pwm_outputs = DynamicDic()
-        
-        self.__pwm_stream = None
-        
+                
         self.print = print_messages
         
     @property
@@ -112,7 +120,11 @@ class DAQ:
         raise AttributeError("Must use 'add_analog_inputs'!")
 
     def add_analog_inputs(self, *pins, **kwargs):
-        self.__rtask.add_channels(AnalogInputChannel, *pins, **kwargs)
+        new_channels = self.__rtask.add_channels(AnalogInputChannel, 
+                                                 *pins, **kwargs)
+        self.reader()
+        self.__pins.update(new_channels)
+        self.__analog_inputs.update(new_channels)
     
     @property
     def pwm_outputs(self, *pins, **kwargs):
@@ -123,7 +135,11 @@ class DAQ:
         raise AttributeError("Must use 'add_pwm_outputs'!")
 
     def add_pwm_outputs(self, *pins, **kwargs):
-        self.__wtask.add_channels(PWMOutputChannel, *pins, **kwargs)
+        new_channels = self.__wtask.add_channels(PWMOutputChannel, 
+                                                 *pins, **kwargs)
+        self.writer()
+        self.__pins.update(new_channels)
+        self.__pwm_outputs.update(new_channels)
         
     @property
     def reader(self):
@@ -136,7 +152,11 @@ class DAQ:
             reader = sr.AnalogMultiChannelReader(self.__rtask.in_stream)
         else:
             reader = sr.AnalogSingleChannelReader(self.__rtask.in_stream)
-        self.__reader = reader
+        try:
+            self.__rtask.streamer = reader
+            self.__reader = reader
+        except:
+            self.__reader = reader
     
     @property
     def writer(self):
@@ -145,64 +165,22 @@ class DAQ:
     @writer.setter
     def writer(self, *args):
         self.__print__("Can't change this manually. Auto-updating...")
-        self.__writer = sw.CounterWriter(self.__task.out_stream)
+        writer = sw.CounterWriter(self.__task.out_stream)
+        try:
+            self.__wtask.streamer = writer
+            self.__writer = writer
+        except:
+            self.__writer = writer
     
-    def read(self, nsamples_total=None, samplerate=None,
-             nsamples_callback=None, callback=None,
-             nsamples_each=20):
-        
-        if callback is not None:
+    def write(self, status, **kwargs):
+        self.__wtask.write(status, **kwargs)
     
-            
-            self.__task.register_every_n_samples_acquired_into_buffer_event(
-                nsamples_callback, # call every nsamples_callback
-                callback)
-            nsamples_each = nsamples_callback
-            self.__print__("Each time, I take nsamples_callback")
-
-
-        if nsamples_total is None:
-        
-            self.__task.timing.cfg_samp_clk_timing(
-                    rate = samplerate,
-                    sample_mode = continuous
-                    )
-            
-            signal = np.array([])
-            self.__task.start()
-            print("Acquiring... Press Ctrl+C to stop.")
-            while True:
-                
-                try:
-                    each_signal = np.zeros((self.n_inputs,
-                                            nsamples_each))
-                    self.__reader.read_many_sample(
-                        each_signal, 
-                        number_of_samples_per_channel=nsamples_each,
-                        timeout=2)
-                    signal = multiappend(signal, each_signal)
-                except KeyboardInterrupt:
-                    self.__task.stop()
-                    return signal
-
-        else:
-
-            signal = np.zeros((self.n_inputs, nsamples_total),
-                               dtype=np.float64)
-            self.__task.start()
-            self.__reader.read_many_sample(
-                signal, 
-                number_of_samples_per_channel=nsamples_total,
-                timeout=2)
-            return signal
-    
-    
-    def write(self, frequency=100e3, duty_cycle=0.5):
-    
-        self.__writer.write_one_sample_pulse_frequency(
-                frequency = frequency,
-                duty_cycle = duty_cycle,
-                )
+    def read(self, nsamples_total=None, samplerate=None, 
+             callback=None, **kwargs):
+        self.__rtask.read(nsamples_total=None,
+                          samplerate=None,
+                          callback=None,
+                          **kwargs)
     
     def __print__(self, message):
         
@@ -210,7 +188,6 @@ class DAQ:
             print(message)
 
 #%%
-
 
 class Task:
     
@@ -249,6 +226,22 @@ class Task:
         self.__print__("Can't modify this manually. Auto-updating...")
         self.__nchannels = len(self.pins)
     
+    def add_channels(self, ChannelClass, *pins, **kwargs):
+               
+        new_channels = {}
+        for p in pins:
+            if self.attribute.is_empty(p):
+                channel = ChannelClass(
+                    self.__device,
+                    self.__task,
+                    self.__streamer,
+                    p,
+                    kwargs)
+                new_channels[p] = channel
+        
+        self.pins.update({p : ChannelClass.__name__ for p in pins})
+        return new_channels
+    
     @property
     def streamer(self):
         return self.__streamer
@@ -269,36 +262,81 @@ class Task:
                         self.__task.out_stream)
         else:
             self.__streamer = streamer
-        
-    def __add_channel__(self, device, task, ChannelClass, 
-                        pin, **kwargs):
-        
-        channel = ChannelClass(device, task, pin, **kwargs)
-        
-        return channel
+        try:
+            for p in self.pins.keys():
+                self.pins[p].streamer = streamer
+        except:
+            self.pins
     
-    def __add_channels__(self, ChannelClass, *pins, **kwargs):
+    def read(self, nsamples_total=None, samplerate=None,
+             nsamples_callback=None, callback=None,
+             nsamples_each=20):
         
-        channel_attributes_dic = {
-                'AnalogInputChannel' : self.analog_inputs,
-                'PWMOutputChannel' : self.pwm_outputs,
-                }
-        attribute_name = ChannelClass.__name__
-        attribute = channel_attributes_dic[attribute_name]
+        if self.write_mode:
+            raise TypeError("This task is meant to write!")
         
-        new_channels = {}
-        for p in pins:
-            if self.attribute.is_empty(p):
-                channel = ChannelClass(
-                    self.__device,
-                    self.__task,
-                    self.__streamer,
-                    p,
-                    kwargs)
-                new_channels[p] = channel
+        if callback is not None:
+    
+            
+            self.__task.register_every_n_samples_acquired_into_buffer_event(
+                nsamples_callback, # call every nsamples_callback
+                callback)
+            nsamples_each = nsamples_callback
+            self.__print__("Each time, I take nsamples_callback")
+
+
+        if nsamples_total is None:
         
-        self.pins.update({p : attribute_name for p in pins})
-        attribute.update(new_channels)
+            self.__task.timing.cfg_samp_clk_timing(
+                    rate = samplerate,
+                    sample_mode = continuous
+                    )
+            
+            signal = np.array([])
+            self.__task.start()
+            print("Acquiring... Press Ctrl+C to stop.")
+            while True:
+                
+                try:
+                    each_signal = np.zeros((self.n_inputs,
+                                            nsamples_each))
+                    self.__streamer.read_many_sample(
+                        each_signal, 
+                        number_of_samples_per_channel=nsamples_each,
+                        timeout=2)
+                    signal = multiappend(signal, each_signal)
+                except KeyboardInterrupt:
+                    self.__task.stop()
+                    return signal
+
+        else:
+
+            signal = np.zeros((self.n_inputs, nsamples_total),
+                               dtype=np.float64)
+            self.__task.start()
+            self.__streamer.read_many_sample(
+                signal, 
+                number_of_samples_per_channel=nsamples_total,
+                timeout=2)
+            return signal
+    
+    
+    def write(self, status=True, frequency=None, duty_cycle=None):
+    
+        if not self.write_mode:
+            raise TypeError("This task is meant to read!")
+        elif self.nchannels>1:
+            raise IndexError("This method is only available for 1 PWM Output")
+        
+        # Look for pin
+        pin = list(self.pins.keys())[0]
+        
+        # Reconfigure if needed
+        if frequency is not None:
+            self.pins[pin].frequency = frequency
+        if duty_cycle is not None:
+            self.pins[pin].duty_cycle = duty_cycle
+        self.pins[pin].status = status
     
     def __print__(self, message):
         
@@ -335,6 +373,7 @@ class AnalogInputChannel:
         
         self.__device = device
         self.__task = task
+        self.__streamer = streamer
         
         self.pin = pin
         self.channel = self.__channel__(pin)
@@ -348,6 +387,14 @@ class AnalogInputChannel:
         
         self.configuration = configuration
         self.input_range = voltage_range
+    
+    @property
+    def streamer(self):
+        return self.__streamer
+    
+    @streamer.setter
+    def streamer(self, streamer):
+        self.__streamer = streamer
     
     @property
     def configuration(self):
@@ -468,7 +515,6 @@ class AnalogInputChannel:
 class PWMOutputChannel:
 
     def __init__(self, device, task, streamer, pin,
-                 stream = None,
                  frequency=100e3, 
                  duty_cycle=0.5):
 
@@ -493,7 +539,7 @@ class PWMOutputChannel:
         
         self.__device = device
         self.__task = task
-        self.__stream = stream
+        self.__streamer = streamer
         
         self.pin = pin
         self.channel = self.__channel__(pin)
@@ -510,6 +556,14 @@ class PWMOutputChannel:
         
         self.frequency = frequency
         self.duty_cycle = duty_cycle
+    
+    @property
+    def streamer(self):
+        return self.__streamer
+    
+    @streamer.setter
+    def streamer(self, streamer):
+        self.__streamer = streamer
     
     @property
     def duty_cycle(self):
@@ -545,22 +599,20 @@ class PWMOutputChannel:
     def status(self, key):
         
         if isinstance(key, str):
-            if self.__stream is None:
-                self.__stream = sw.CounterWriter(self.__task.out_stream)
-            self.__stream.write_one_sample_pulse_frequency(
+            self.__streamer.write_one_sample_pulse_frequency(
                 frequency = self.frequency,
                 duty_cycle = self.duty_cycle,
                 )
         elif isinstance(key, bool):
             if self.__status != key:
                 if key:
-                    if self.__stream is None:
-                        self.__stream = sw.CounterWriter(
-                                self.__task.out_stream)
+                    self.__task.start()
                     self.__stream.write_one_sample_pulse_frequency(
                         frequency = self.frequency,
                         duty_cycle = self.duty_cycle,
                         )
+                else:
+                    self.__task.end()
                 self.__status = key
     
     def __channel__(self, pin):
