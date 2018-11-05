@@ -7,6 +7,54 @@ Created on Thu Nov  1 18:45:10 2018
 
 #%%
 
+class DynamicDic:
+    
+    def __init__(self, dic):
+        self.__dic = dic
+    
+    def __call__(self, *key):
+
+        if len(key) == 1:
+            return self.__dic[key[0]]
+        
+        else:
+            return [self.__dic[k] for k in key]
+    
+    def update(self, dic):
+        
+        self.__dic.update(dic)
+    
+    def is_empty(self, key=None):
+        
+        if key is None:
+            return len(list(self.__dic.keys())) == 0
+        elif key in self.__dic.keys():
+            return False
+        else:
+            return True            
+
+class DynamicList:
+    
+    def __init__(self, l):
+        self.__list = l
+    
+    def __call__(self, *index):
+        
+        if len(index) == 1:
+            return self.__list[index[0]]
+        
+        else:
+            return [self.__list[i] for i in index]
+    
+    def update(self, index, element):
+        
+        try:
+            self.__list[index] = element
+        except IndexError:
+            self.__list.append(element)
+
+#%%
+
 class ObjectView(object):
     
     def __init__(self, d):
