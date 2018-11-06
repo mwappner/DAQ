@@ -5,53 +5,74 @@ Created on Thu Nov  1 18:45:10 2018
 @author: Usuario
 """
 
-#%%
+#%%       
 
-class DynamicDic:
+class DynamicList(list):
     
-    def __init__(self, dic):
-        self.__dic = dic
+    """Subclass that initializes a callable list
     
-    def __call__(self, *key):
-
-        if len(key) == 1:
-            return self.__dic[key[0]]
-        
-        else:
-            return [self.__dic[k] for k in key]
+    Examples
+    --------
+    >>> a = DynamicList([1,2,3])
+    >>> a(0, 1)
+    [1,2]
+    >> a(0,2)
+    [1,3]
+    >>> a.append(4)
+    >>> a
+    [1,2,3,4]
     
-    def update(self, dic):
-        
-        self.__dic.update(dic)
+    """
     
-    def is_empty(self, key=None):
-        
-        if key is None:
-            return len(list(self.__dic.keys())) == 0
-        elif key in self.__dic.keys():
-            return False
-        else:
-            return True            
-
-class DynamicList:
-    
-    def __init__(self, l):
-        self.__list = l
+    def __init__(self, iterable=[]):
+        super().__init__(iterable)
     
     def __call__(self, *index):
         
         if len(index) == 1:
-            return self.__list[index[0]]
+            return self[index[0]]
         
         else:
-            return [self.__list[i] for i in index]
+            return [self[i] for i in index]
     
-    def update(self, index, element):
+#%%
+
+class DynamicDic(dict):
+    
+    """Subclass that initializes a callable dictionary.
+    
+    Examples
+    --------
+    >>> a = DynamicDic()
+    >>> a.update({'color': 'blue', 'age': 22})
+    >>> a
+    {'age': 22, 'color': 'blue'}
+    >>> a('age', 'color')
+    [22, 'blue']
+    
+    """
+    
+    def __init__(self, **elements):
         
-        try:
-            self.__list[index] = element
-        except IndexError:
-            self.__list.append(element)
+        super().__init__(**elements)
+        return
+    
+    def __call__(self, *key):
+
+        if len(key) == 1:
+            return self[key[0]]
+        
+        else:
+            return [self[k] for k in key]
+    
+    def is_empty(self, key=None):
+        
+        if key is None:
+            return len(list(self.keys())) == 0
+        elif key in self.keys():
+            return False
+        else:
+            return True  
 
 #%%
 
@@ -84,6 +105,7 @@ class ObjectDict(dict):
 #%%
 
 class ClassWithInstances:
+    
     """Example of a class which allows dot calling instances.
     
     Examples
@@ -105,7 +127,7 @@ class ClassWithInstances:
     >> Z.a.sub_prop
     30
     >> instance_c = Z
-    >> Z.update({'c': instance_c})
+    >> Z.update(c=instance_c)
     >> Z.c.a.sub_prop
     30
     
@@ -164,13 +186,14 @@ class ClassWithInstances:
             
             eval(command)
     
-    def update(self, new_dict):
+    def update(self, **new_dict):
         
-        self.__dict__.update(new_dict)
+        self.__dict__.update(dict(new_dict))
         
 #%%
 
 class InstancesDic:
+    
     """Example of a class that holds a callable dictionary of instances.
 
     Examples
@@ -248,6 +271,7 @@ class InstancesDic:
 #%%
 
 class TypedList(list):
+    
     """A list that only appends a certain type"""    
     
     def __init__(self, Class):
@@ -262,6 +286,7 @@ class TypedList(list):
 # https://stackoverflow.com/questions/3487434/overriding-append-method-after-inheriting-from-a-python-list
 
 class NoNoneList(list):
+    
     """A list that doesn't append None elements"""
     
     def append(self, item):
@@ -271,6 +296,7 @@ class NoNoneList(list):
 #%%
 
 class MethodRunOnList:
+    
     """"A class that runs its method on a list"""
     
     def __init__(self, alist):#, methods):
@@ -286,28 +312,9 @@ class MethodRunOnList:
 
 #%%
 
-class MyClass:
+class WrapperList(list):
     
-    def __init__(self, value=10):
-        self.sub_prop = value
-        self._prop = value
-    
-    @property
-    def prop(self):
-        return self._prop
-    
-    @prop.setter
-    def prop(self, value):
-        return self._prop
-        
-    def sub_method(self, item):
-        return item * self.sub_prop
-    
-    def method(self, item):
-        return item * self.prop
-
-class SupraMyClass(MyClass):
-    """A subclass that applies methods to a list of classes.
+    """A list subclass that applies methods to a list of instances.
     
     Examples
     --------
@@ -323,7 +330,7 @@ class SupraMyClass(MyClass):
         
         @prop.setter
         def prop(self, value):
-            return self._prop
+            self._prop = value
             
         def sub_method(self, item):
             return item * self.sub_prop
@@ -331,7 +338,7 @@ class SupraMyClass(MyClass):
         def method(self, item):
             return item * self.prop
         
-    >> Z = SupraMyClass([MyClass(), MyClass(2)])
+    >> Z = WrapperList([MyClass(), MyClass(2)])
     >> Z.prop
     [10, 2]
     >> Z._prop
@@ -340,39 +347,46 @@ class SupraMyClass(MyClass):
     [10, 2]
     >> Z.method(1)
     [10, 2]
+    >> Z.prop = 3
+    >> Z.prop
+    [3, 3]
+    >> Z.append(MyClass(1))
+    >> Z.prop
+    [3, 3, 1]
+    >> Z.prop = [10, 2, 1]
+    >> Z.prop
+    [10, 2, 1]
     
     Warnings
     --------
+    >> Z.prop = [2, 3]
     >> Z.prop
-    [10, 2]
-    >> Z.prop = 3
-    >> Z.prop # I would like it to return [3, 3]
-    3
-    >> [l.prop for l in Z.__list__] # I'd also like [3, 3]
-    [10, 2]
+    [[2,3], [2,3], [2,3]]
     
     """
-    
 
-    def __init__(self, alist):
+    def __init__(self, iterable=[]):
         
-        self.mylist = alist
-    
-    @property
-    def mylist(self):
-        return self.__list__
-    
-    @mylist.setter
-    def mylist(self, value):
-        self.__list__ = value
+        super().__init__(iterable)
     
     def __getattr__(self, name):
         
-        result = []
-        for l in self.mylist:
-            result.append(eval('l.{}'.format(name)))
-        return result
+        if name in dir(self):
+        
+            super().__getattribute__(name)
+        
+        else:
+            
+            result = []
+            for ins in self:
+                result.append(ins.__getattribute__(name))
+            return result
     
-#    def __setattr__(self, name, value):
-#        
-#        eval('self.{} = value'.format(name))
+    def __setattr__(self, name, value):
+        
+        if isinstance(value, list) and len(value) == len(self):
+            for ins, v in zip(self, value):
+                ins.__setattr__(name, v)
+        else:
+            for ins in self:
+                ins.__setattr__(name, value)
