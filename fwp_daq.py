@@ -13,24 +13,25 @@ import nidaqmx as nid
 import nidaqmx.stream_readers as sr
 import nidaqmx.stream_writers as sw
 import nidaqmx.system as sys
-import nidaqmx.constants.AcquisitionType.CONTINUOUS as continuous
-import nidaqmx.constants.TerminalConfiguration as conf
 #from matplotlib import pyplot as plt
 #import time
 
-def multiappend(nparray, new_nparray):
+continuous = nid.constants.AcquisitionType.CONTINUOUS
+conf = nid.constants.TerminalConfiguration
+
+def multiappend(nparray, new_nparray, fast_speed=True):
     """Analog to np.append but with 2D np.arrays"""
-    nrows = len(nparray[:,0])
     
-    if len(np.new_nparray[:,0]) != nrows:
-        raise IndexError("Different number of rows.")
-    elif len(np.new_nparray[0,:]) != len(np.nparray[0,:]):
-        raise IndexError("Different number of columns.")
+    nrows = len(nparray[:,0])
+    if not fast_speed:
+        if len(np.new_nparray[:,0]) != nrows:
+            raise IndexError("Different number of rows.")
+        elif len(np.new_nparray[0,:]) != len(np.nparray[0,:]):
+            raise IndexError("Different number of columns.")
     
     construct = []
     for i in range(nrows):
-        construct.append(
-            np.append(nparray[i,:], new_nparray[i,:]))
+        construct.append(np.append(nparray[i,:], new_nparray[i,:]))
     return np.array(construct)
 
 #%%
@@ -65,7 +66,7 @@ class DAQ:
     def __init__(self, device, print_messages=False):
         
         self.__device = device
-        self.__pins = DynamicDic()
+        self.__pins = DynamicDic({})
         self.writer()
         self.reader()
         
@@ -78,8 +79,8 @@ class DAQ:
                             True,
                             print_messages)
         
-        self.__analog_inputs = DynamicDic()
-        self.__pwm_outputs = DynamicDic()
+        self.__analog_inputs = DynamicDic({})
+        self.__pwm_outputs = DynamicDic({})
                 
         self.print = print_messages
         
@@ -198,14 +199,12 @@ class Task:
         self.__task = nid.Task()
         self.__streamer = streamer
         
-        self.pins = []
+        self.__pins = DynamicDic({})
         
         if 'r' in mode.lower():
             self.write_mode = False
-            self.__analog_inputs = DynamicDic()
         elif 'w' in mode.lower():
             self.write_mode = True
-            self.__pwm_outputs = DynamicDic()
         
         self.print = print_messages
         
@@ -239,7 +238,7 @@ class Task:
                     kwargs)
                 new_channels[p] = channel
         
-        self.pins.update({p : ChannelClass.__name__ for p in pins})
+        self.__pins.update({p : ChannelClass.__name__ for p in pins})
         return new_channels
     
     @property
