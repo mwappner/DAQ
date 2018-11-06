@@ -104,94 +104,6 @@ class ObjectDict(dict):
 
 #%%
 
-#class ClassWithInstances:
-#    
-#    """Example of a class which allows dot calling instances.
-#    
-#    Examples
-#    --------
-#    >> class MyClass:
-#        def __init__(self, value=10):
-#            self.sub_prop = value
-#    >> instance_a, instance_b = MyClass(), MyClass(12)
-#    >> Z = ClassWithInstances(dict(a=instance_a,
-#                                   b=instance_b))
-#    >> Z.prop
-#    'Sorry'
-#    >> Z.prop = 'Not sorry'
-#    >> Z.prop
-#    'Not sorry'
-#    >> Z.a.sub_prop
-#    10
-#    >> Z.a.sub_prop = 30
-#    >> Z.a.sub_prop
-#    30
-#    >> instance_c = Z
-#    >> Z.update(c=instance_c)
-#    >> Z.c.a.sub_prop
-#    30
-#    
-#    """
-#    
-#    def __init__(self, class_dict):
-#        
-#        self.__dict__.update(class_dict)
-#        self.prop = 'Sorry'
-#    
-#    @property
-#    def prop_2(self):
-#        return self.__prop_2
-#    
-#    @prop_2.setter
-#    def prop_2(self, value):
-#        self.__prop_2 = value
-#    
-#    def __getattr__(self, name):
-#        
-#        name = name.split('.')
-#        
-#        if len(name) == 1:
-#            
-#            return eval('self.{}'.format(name[0]))
-#        
-#        else:
-#            
-#            class_name = name[0]        
-#            attribute_name = name[-1]
-#            
-#            if class_name not in self.__dict__.keys():
-#                raise AttributeError("No such attribute: " + name)
-#            
-#            command = "self.__dict__['{}']".format(class_name)
-#            command = command + '.' + attribute_name
-#            
-#            return eval(command)
-#
-#    def __setattr__(self, name, value):
-#        
-#        name = name.split('.')
-#        
-#        if len(name) == 1:
-#
-#            self.__dict__.update({name[0] : value})
-#        
-#        else:
-#        
-#            class_name = name[0]        
-#            attribute_name = name[-1]
-#            
-#            command = "self.__dict__['{}']".format(class_name)
-#            command = command + '.' + attribute_name
-#            command = command + '=' + str(value)
-#            
-#            eval(command)
-#    
-#    def update(self, **new_dict):
-#        
-#        self.__dict__.update(dict(new_dict))
-
-#%%
-
 class InstancesDic:
     
     """Example of a class that holds a callable dictionary of instances.
@@ -543,6 +455,12 @@ class ClassWithInstances:
     {'a': 10, 'b': 2}
     >> Z.all.method(2)
     {'a': 20, 'b': 4}
+    >>
+    >> # This is an updatable class too
+    >> Z.add(c=MyClass(4))
+    >> Z.sub_prop
+    {'a': 1, 'b': 3, 'c': 4}
+    
     
     Warnings
     --------
@@ -555,13 +473,6 @@ class ClassWithInstances:
     {'a': 10, 'b': 2}
     >> Z.prop
     RecursionError: maximum recursion depth exceeded
-    >>
-    >> # Has some updating problems
-    >> Z.update(c=MyClass(3))
-    >> Z.sub_prop
-    {'a': 1, 'b': 2, 'c': 3}
-    >> Z.all.sub_prop
-    {'a': 1, 'b': 3}
     
     """
     
@@ -569,8 +480,8 @@ class ClassWithInstances:
         
         self.__instances = {}
         self.__properties = {}
-        self.update(**instances)
-        self.all = WrapperDict(**self.instances)
+        self.all = WrapperDict()
+        self.add(**instances)
     
     @property
     def instances(self):
@@ -578,7 +489,7 @@ class ClassWithInstances:
     
     @instances.setter
     def instances(self, value):
-        return AttributeError("See 'update' method instead.")
+        return AttributeError("See 'add' method instead.")
     
     @property
     def properties(self):
@@ -588,13 +499,14 @@ class ClassWithInstances:
     def properties(self, value):
         return AttributeError("Shouldn't set this manually!")
     
-    def update(self, **instances):
+    def add(self, **instances):
         
         instances = dict(instances)
         self.__dict__.update(instances)
         self.instances.update(instances)
         for name, ins in instances.items():
             self.properties.update({name: m for m in dir(ins)})
+        self.all.update(**instances)
     
     def __getattr__(self, name):
         
