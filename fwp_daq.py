@@ -66,7 +66,7 @@ class DAQ:
     def __init__(self, device, print_messages=False):
         
         self.__device = device
-        self.__pins = DynamicDic({})
+        self.__pins = DynamicDic()
         self.writer()
         self.reader()
         
@@ -79,8 +79,8 @@ class DAQ:
                             True,
                             print_messages)
         
-        self.__analog_inputs = DynamicDic({})
-        self.__pwm_outputs = DynamicDic({})
+        self.__analog_inputs = DynamicDic()
+        self.__pwm_outputs = DynamicDic()
                 
         self.print = print_messages
         
@@ -199,7 +199,7 @@ class Task:
         self.__task = nid.Task()
         self.__streamer = streamer
         
-        self.__pins = DynamicDic({})
+        self.__pins = DynamicDic()
         
         if 'r' in mode.lower():
             self.write_mode = False
