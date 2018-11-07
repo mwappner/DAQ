@@ -16,20 +16,51 @@ import nidaqmx.system as sys
 
 continuous = nid.constants.AcquisitionType.CONTINUOUS
 
+def zeros(size, dtype=np.float64):
+    
+    """Analog to np.zeros but reshapes to N if size=(1, N)"""
+    
+    try:
+        len(size)
+        size = tuple(size)
+    except TypeError:
+        pass
+    
+    if isinstance(size, tuple):
+        if size[0] == 1:
+            size = size[1]
+    
+    return np.zeros(size, dtype=dtype)
+
 def multiappend(nparray, new_nparray, fast_speed=True):
+    
     """Analog to np.append but with 2D np.arrays"""
     
-    nrows = len(nparray[:,0])
+    try:
+        nrows = len(new_nparray[:,0])
+    except IndexError:
+        nrows = 1
     if not fast_speed:
-        if len(np.new_nparray[:,0]) != nrows:
+        try:
+            nrows0 = len(np.nparray[:,0])
+        except IndexError:
+            nrows = 1
+        if nrows0 != nrows:
             raise IndexError("Different number of rows.")
-        elif len(np.new_nparray[0,:]) != len(np.nparray[0,:]):
-            raise IndexError("Different number of columns.")
     
-    construct = []
-    for i in range(nrows):
-        construct.append(np.append(nparray[i,:], new_nparray[i,:]))
-    return np.array(construct)
+    if len(nparray) == 0:
+        return new_nparray
+    
+    elif nrows == 1:
+        return np.append(nparray, new_nparray)
+    
+    else:
+        construct = []
+        for i in range(nrows):
+            row = nparray[i,:]
+            row = np.append(row, new_nparray[i,:])
+            construct.append(row)
+        return np.array(construct)
 
 #%%
 
@@ -85,7 +116,7 @@ class DAQ:
         self.__device = device
         
         self.conection = conection
-        if conection:
+        if not conection:
             self.print = True
         else:
             self.print = print_messages
@@ -93,15 +124,13 @@ class DAQ:
         self.tasks = WrapperDict(
                 
             __inputs = Task(self.device,
-                            self.reader,
-                            False,
-                            print_messages,
-                            conection),
+                            mode='r',
+                            print_messages=print_messages,
+                            conection=conection),
             __outputs = Task(self.device,
-                             self.writer,
-                             True,
-                             print_messages,
-                             conection)
+                             mode='w',
+                             print_messages=print_messages,
+                             conection=conection)
             )
     
     @property
@@ -161,6 +190,10 @@ class DAQ:
     def add_pwm_outputs(self, *pins, **kwargs):
         self.outputs.add_channels(fch.PWMOutputChannel, *pins, **kwargs)
         
+    def close(self):
+        self.outputs.close()
+        self.inputs.close()
+        
     def __print__(self, message):
         if self.print:
             print(message)
@@ -196,14 +229,16 @@ class Task:
             self.write_mode = False
 
         self.conection = conection
-        if conection:
+        if not conection:
             self.print = True
         else:
             self.print = print_messages
 
-        self.streamer = True        
         self.all = WrapperDict()
+        self.pins = WrapperDict()
         self.__nchannels = 0
+        
+        self.streamer = True
     
     @property
     def nchannels(self):
@@ -230,7 +265,7 @@ class Task:
                     print_messages=self.print,
                     conection=self.conection)
                 new_pins[p] = ch
-            new_channels = pins[0]
+                new_channels[name] = ch
             
         else:
             
@@ -244,16 +279,15 @@ class Task:
                     print_messages=self.print,
                     conection=self.conection)
                 new_pins[p] = ch
-                new_channels['ch{}'.format(ch.channel)] = ch
+                name = ch.channel.split('/')[1]
+                new_channels[name] = ch
         
-        self.all.update(new_pins)
+        self.pins.update(new_pins)
         self.all.update(new_channels)
         
-        new_pins = {'p{}'.format(k) : v for k, v in new_pins.items()}
-        
-        self.__dict__.update(new_pins)
         self.__dict__.update(new_channels)
-        self.__nchannels = self.nchannels + len(new_pins)
+        self.__nchannels = self.nchannels + len(new_channels)
+        self.streamer = True
     
     @property
     def streamer(self):
@@ -277,10 +311,11 @@ class Task:
                         self.__task.out_stream)
         else:
             raise AttributeError("Can't set this manually!")
-        try:
-            self.all.streamer = self.__streamer
-        except:
-            self.__print__("Coudn't set streamer to channels")
+        if self.nchannels > 0:
+            try:
+                self.all.streamer = self.__streamer
+            except:
+                self.__print__("Coudn't set streamer to channels")
     
     def read(self, nsamples_total=None, samplerate=None,
              nsamples_callback=None, callback=None,
@@ -320,27 +355,30 @@ class Task:
             else:
                 self.__print__("Should run 'task.start'")
             print("Acquiring... Press Ctrl+C to stop.")
+            
+            nbuffers = 0
             while True:
                 
                 try:
-                    each_signal = np.zeros((self.n_inputs,
-                                            nsamples_each))
+                    each_signal = zeros((self.nchannels,
+                                         nsamples_each),
+                                         dtype=np.float64)
                     if self.conection:
                         self.__streamer.read_many_sample(
                             each_signal, 
                             number_of_samples_per_channel=nsamples_each,
                             timeout=2)
-                    else:
-                        self.__print__("Should 'task.read_many...'")
                     signal = multiappend(signal, each_signal)
+                    nbuffers = nbuffers + 1
+                    self.__print__("Number of buffers: " + nbuffers)
                 except KeyboardInterrupt:
                     self.__task.stop()
                     return signal
 
         else:
 
-            signal = np.zeros((self.n_inputs, nsamples_total),
-                               dtype=np.float64)
+            signal = zeros((self.nchannels, nsamples_total),
+                            dtype=np.float64)
             if self.conection:
                 self.__task.start()
                 self.__streamer.read_many_sample(
@@ -367,6 +405,9 @@ class Task:
             self.all.duty_cycle = duty_cycle
         self.all.status = status
     
+    def close(self):
+        self.__task.close()
+    
     def __print__(self, message):
         
         if self.print:
@@ -383,7 +424,6 @@ class OldDAQ:
     def __init__(self, device, print_messages=False):
         
         self.__device = device
-        self.__pins = DynamicDict()
         self.writer()
         self.reader()
         
@@ -400,34 +440,22 @@ class OldDAQ:
         self.__pwm_outputs = DynamicDict()
                 
         self.print = print_messages
-        
-    @property
-    def pins(self):
-        return self.__pins
-    
-    @pins.setter
-    def pins(self, value):
-        raise ValueError("You shouldn't modify this manually!")
     
     @property
     def ninputs(self):
-        return self.__ninputs
+        return self.inputs.nchannels
     
     @ninputs.setter
     def ninputs(self, value):
-        self.__print__("Can't modify this manually. Auto-updating...")
-        channels = [k for k,v in self.pins.items() if 'in' in v.lower()]
-        self.__ninputs = len(channels)
+        raise AttributeError("Can't modify this manually")
 
     @property
     def noutputs(self):
-        return self.__noutputs
+        return self.outputs.nchannels
     
     @noutputs.setter
     def noutputs(self, value):
-        self.__print__("Can't modify this manually. Auto-updating...")
-        channels = [k for k,v in self.pins.items() if 'out' in v.lower()]
-        self.__noutputs = len(channels)
+        raise AttributeError("Can't modify this manually")
     
     @property
     def analog_inputs(self):
