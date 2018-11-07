@@ -6,18 +6,15 @@ Based on https://github.com/fotonicaOrg/daq.git from commit 387c7c3
 
 """
 
-from fwp_classes import DynamicDic
-import fwp_string as fst
+from fwp_classes import DynamicDict, WrapperDict
+import fwp_daq_channels as fch
 import numpy as np
 import nidaqmx as nid
 import nidaqmx.stream_readers as sr
 import nidaqmx.stream_writers as sw
 import nidaqmx.system as sys
-#from matplotlib import pyplot as plt
-#import time
 
 continuous = nid.constants.AcquisitionType.CONTINUOUS
-conf = nid.constants.TerminalConfiguration
 
 def multiappend(nparray, new_nparray, fast_speed=True):
     """Analog to np.append but with 2D np.arrays"""
@@ -61,26 +58,346 @@ def devices():
 
 #%%
 
+"""Here starts the newer version"""
+
+#%%
+
 class DAQ:
+    
+    """Allows to read and write with callback on NI USB 6212"""
+    
+    def __init__(self, device, print_messages=False,
+                 conection=True):
+        
+        """Initializes a DAQ class that allows to read and write.
+        
+        Parameters
+        ----------
+        device : str
+            NI device's name where analog input channel/s should be put.
+        print_messages=False : bool, optional
+            Whether to print messages or not.
+        conection=True : bool, optional
+            Whether you have a real conection with a NI USB 6212 or not. 
+            Allows to test classes.
+        """  
+        
+        self.__device = device
+        
+        self.conection = conection
+        if conection:
+            self.print = True
+        else:
+            self.print = print_messages
+        
+        self.tasks = WrapperDict(
+                
+            __inputs = Task(self.device,
+                            self.reader,
+                            False,
+                            print_messages,
+                            conection),
+            __outputs = Task(self.device,
+                             self.writer,
+                             True,
+                             print_messages,
+                             conection)
+            )
+    
+    @property
+    def inputs(self):
+        return self.__inputs
+    
+    @inputs.setter
+    def inputs(self, value):
+        msg = "Why don't you chek 'add_analog_inputs' instead?"
+        raise AttributeError(msg)
+
+    @property
+    def outputs(self):
+        return self.__outputs
+    
+    @outputs.setter
+    def outputs(self, value):
+        msg = "Why don't you chek 'add_pwm_outputs' instead?"
+        raise AttributeError(msg)
+    
+    @property
+    def ninputs(self):
+        return self.inputs.nchannels
+    
+    @ninputs.setter
+    def ninputs(self, value):
+        raise AttributeError("Can't modify this manually!")
+
+    @property
+    def noutputs(self):
+        return self.outputs.nchannels
+    
+    @noutputs.setter
+    def noutputs(self, value):
+        raise AttributeError("Can't modify this manually!")
+
+    @property
+    def reader(self):
+        return self.inputs.streamer
+    
+    @reader.setter
+    def reader(self, value):
+        raise AttributeError("Can't modify this manually!")
+
+    @property
+    def writer(self):
+        return self.outputs.streamer
+    
+    @writer.setter
+    def writer(self, value):
+        raise AttributeError("Can't modify this manually!")
+
+    def add_analog_inputs(self, *pins, **kwargs):
+        self.inputs.add_channels(fch.AnalogInputChannel, 
+                                 *pins, **kwargs)
+
+    def add_pwm_outputs(self, *pins, **kwargs):
+        self.outputs.add_channels(fch.PWMOutputChannel, *pins, **kwargs)
+        
+    def __print__(self, message):
+        if self.print:
+            print(message)
+
+#%%
+
+class Task:
+    
+    def __init__(self, device, mode='r', 
+                 print_messages=False, conection=True):
+        
+        """Initializes class that allows whether to read or to write.
+        
+        Parameters
+        ----------
+        device : str
+            NI device's name where analog input channel/s should be put.
+        mode : str, optional {'r', 'w'}
+            Says whether this class is to read or to write.
+        print_messages=False : bool, optional
+            Whether to print messages or not.
+        conection=True : bool, optional
+            Whether you have a real conection with a NI USB 6212 or not. 
+            Allows to test classes.
+        """  
+        
+        self.__device = device
+        self.__task = nid.Task()
+
+        if 'w' in mode.lower():
+            self.write_mode = True        
+        elif 'r' in mode.lower():
+            self.write_mode = False
+
+        self.conection = conection
+        if conection:
+            self.print = True
+        else:
+            self.print = print_messages
+
+        self.streamer = True        
+        self.all = WrapperDict()
+        self.__nchannels = 0
+    
+    @property
+    def nchannels(self):
+        return self.__nchannels
+    
+    @nchannels.setter
+    def nchannels(self, value):
+        raise AttributeError("Can't modify this manually!")
+    
+    def add_channels(self, ChannelClass, *pins, **kwargs):
+        
+        new_pins = {}
+        new_channels = {}
+        
+        if isinstance(pins[0], dict):
+            
+            for name, p in pins[0].items():
+                ch = ChannelClass(
+                    self.__device,
+                    self.__task,
+                    self.__streamer,
+                    p,
+                    **kwargs,
+                    print_messages=self.print,
+                    conection=self.conection)
+                new_pins[p] = ch
+            new_channels = pins[0]
+            
+        else:
+            
+            for p in pins:
+                ch = ChannelClass(
+                    self.__device,
+                    self.__task,
+                    self.__streamer,
+                    p,
+                    **kwargs,
+                    print_messages=self.print,
+                    conection=self.conection)
+                new_pins[p] = ch
+                new_channels['ch{}'.format(ch.channel)] = ch
+        
+        self.all.update(new_pins)
+        self.all.update(new_channels)
+        
+        new_pins = {'p{}'.format(k) : v for k, v in new_pins.items()}
+        
+        self.__dict__.update(new_pins)
+        self.__dict__.update(new_channels)
+        self.__nchannels = self.nchannels + len(new_pins)
+    
+    @property
+    def streamer(self):
+        return self.__streamer
+    
+    @streamer.setter
+    def streamer(self, boolean):
+        if not isinstance(boolean, bool):
+            self.__print__("Hey! This value should be a bool.")
+        if boolean:
+            if not self.write_mode:
+                if self.nchannels > 1:
+                    reader = sr.AnalogMultiChannelReader(
+                            self.__task.in_stream)
+                else:
+                    reader = sr.AnalogSingleChannelReader(
+                            self.__task.in_stream)
+                self.__streamer = reader
+            else:
+                self.__streamer = sw.CounterWriter(
+                        self.__task.out_stream)
+        else:
+            raise AttributeError("Can't set this manually!")
+        try:
+            self.all.streamer = self.__streamer
+        except:
+            self.__print__("Coudn't set streamer to channels")
+    
+    def read(self, nsamples_total=None, samplerate=None,
+             nsamples_callback=None, callback=None,
+             nsamples_each=20):
+        
+        if self.write_mode:
+            raise TypeError("This task is meant to write!")
+        
+        if samplerate is None:
+            
+            samplerate = int(400e3/self.nchannels)
+        
+        if callback is not None:
+    
+            if self.conection:
+                self.__task.register_every_n_samples_acquired_into_buffer_event(
+                    nsamples_callback, # call every nsamples_callback
+                    callback)
+            else:
+                self.__print__("Should 'task.register_every...'")
+            nsamples_each = nsamples_callback
+            self.__print__("Each time, I take nsamples_callback")
+
+        if nsamples_total is None:
+        
+            if self.conection:
+                self.__task.timing.cfg_samp_clk_timing(
+                        rate = samplerate,
+                        sample_mode = continuous
+                        )
+            else:
+                self.__print__("Should 'task.timing.cfg...'")
+            
+            signal = np.array([])
+            if self.conection:
+                self.__task.start()
+            else:
+                self.__print__("Should run 'task.start'")
+            print("Acquiring... Press Ctrl+C to stop.")
+            while True:
+                
+                try:
+                    each_signal = np.zeros((self.n_inputs,
+                                            nsamples_each))
+                    if self.conection:
+                        self.__streamer.read_many_sample(
+                            each_signal, 
+                            number_of_samples_per_channel=nsamples_each,
+                            timeout=2)
+                    else:
+                        self.__print__("Should 'task.read_many...'")
+                    signal = multiappend(signal, each_signal)
+                except KeyboardInterrupt:
+                    self.__task.stop()
+                    return signal
+
+        else:
+
+            signal = np.zeros((self.n_inputs, nsamples_total),
+                               dtype=np.float64)
+            if self.conection:
+                self.__task.start()
+                self.__streamer.read_many_sample(
+                    signal, 
+                    number_of_samples_per_channel=nsamples_total,
+                    timeout=2)
+                self.__task.stop()
+            else:
+                self.__print__("Should 'start'+'read_many...'+'stop'")
+            return signal
+    
+    def write(self, status=True, frequency=None, duty_cycle=None):
+    
+        if not self.write_mode:
+            raise TypeError("This task is meant to read!")
+        elif self.nchannels>1:
+            msg = "This method is only available for 1 PWM Output"
+            raise IndexError(msg)
+                
+        # Reconfigure if needed
+        if frequency is not None:
+            self.all.frequency = frequency
+        if duty_cycle is not None:
+            self.all.duty_cycle = duty_cycle
+        self.all.status = status
+    
+    def __print__(self, message):
+        
+        if self.print:
+            print(message)
+
+#%%
+
+"""Here starts an older version of the same classes"""
+
+#%%
+
+class OldDAQ:
     
     def __init__(self, device, print_messages=False):
         
         self.__device = device
-        self.__pins = DynamicDic()
+        self.__pins = DynamicDict()
         self.writer()
         self.reader()
         
-        self.__rtask = Task(self.device,
-                            self.reader,
-                            False,
-                            print_messages)
-        self.__wtask = Task(self.device,
-                            self.writer,
-                            True,
-                            print_messages)
+        self.__rtask = OldTask(self.device,
+                               self.reader,
+                               False,
+                               print_messages)
+        self.__wtask = OldTask(self.device,
+                               self.writer,
+                               True,
+                               print_messages)
         
-        self.__analog_inputs = DynamicDic()
-        self.__pwm_outputs = DynamicDic()
+        self.__analog_inputs = DynamicDict()
+        self.__pwm_outputs = DynamicDict()
                 
         self.print = print_messages
         
@@ -121,7 +438,7 @@ class DAQ:
         raise AttributeError("Must use 'add_analog_inputs'!")
 
     def add_analog_inputs(self, *pins, **kwargs):
-        new_channels = self.__rtask.add_channels(AnalogInputChannel, 
+        new_channels = self.__rtask.add_channels(fch.AnalogInputChannel, 
                                                  *pins, **kwargs)
         self.reader()
         self.__pins.update(new_channels)
@@ -136,7 +453,7 @@ class DAQ:
         raise AttributeError("Must use 'add_pwm_outputs'!")
 
     def add_pwm_outputs(self, *pins, **kwargs):
-        new_channels = self.__wtask.add_channels(PWMOutputChannel, 
+        new_channels = self.__wtask.add_channels(fch.PWMOutputChannel, 
                                                  *pins, **kwargs)
         self.writer()
         self.__pins.update(new_channels)
@@ -177,10 +494,11 @@ class DAQ:
         self.__wtask.write(status, **kwargs)
     
     def read(self, nsamples_total=None, samplerate=None, 
-             callback=None, **kwargs):
-        self.__rtask.read(nsamples_total=None,
-                          samplerate=None,
-                          callback=None,
+             callback=None, nsamples_each=20, **kwargs):
+        self.__rtask.read(nsamples_total=nsamples_total,
+                          samplerate=samplerate,
+                          callback=callback,
+                          nsamples_each=20,
                           **kwargs)
     
     def __print__(self, message):
@@ -190,16 +508,16 @@ class DAQ:
 
 #%%
 
-class Task:
+class OldTask:
     
-    def __init__(self, device, streamer=None, 
+    def __init__(self, device, streamer=True, 
                  mode='r', print_messages=False):
         
         self.__device = device
         self.__task = nid.Task()
         self.__streamer = streamer
         
-        self.__pins = DynamicDic()
+        self.__pins = DynamicDict()
         
         if 'r' in mode.lower():
             self.write_mode = False
@@ -229,7 +547,7 @@ class Task:
                
         new_channels = {}
         for p in pins:
-            if self.attribute.is_empty(p):
+            if self.pins.is_empty(p):
                 channel = ChannelClass(
                     self.__device,
                     self.__task,
@@ -239,6 +557,7 @@ class Task:
                 new_channels[p] = channel
         
         self.__pins.update({p : ChannelClass.__name__ for p in pins})
+        self.nchannels = True
         return new_channels
     
     @property
@@ -246,8 +565,8 @@ class Task:
         return self.__streamer
     
     @streamer.setter
-    def streamer(self, streamer=None):
-        if self.__streamer is None:
+    def streamer(self, streamer):
+        if streamer is True:
             if not self.write_mode:
                 if self.nchannels > 1:
                     reader = sr.AnalogMultiChannelReader(
@@ -261,11 +580,11 @@ class Task:
                         self.__task.out_stream)
         else:
             self.__streamer = streamer
-        try:
-            for p in self.pins.keys():
+        for p in self.pins.keys():
+            try:
                 self.pins[p].streamer = streamer
-        except:
-            self.pins
+            except:
+                pass
     
     def read(self, nsamples_total=None, samplerate=None,
              nsamples_callback=None, callback=None,
@@ -273,6 +592,10 @@ class Task:
         
         if self.write_mode:
             raise TypeError("This task is meant to write!")
+        
+        if samplerate is None:
+            
+            samplerate = 400e3/self.nchannels
         
         if callback is not None:
     
@@ -344,301 +667,7 @@ class Task:
 
 #%%
 
-class AnalogInputChannel:
-
-    def __init__(self, device, task, streamer, pin,
-                 voltage_range=[-10, 10], 
-                 configuration='NRSE'):
-
-        """Initializes analog input channel.
-        
-        Parameters
-        ----------
-        device : str
-            NI device's name where analog input channel/s should be put.
-        task : nidaqmx.Task()
-            NIDAQMX's task where this channels should be added.
-        streamer : nidaqmx.stream_readers class
-            NIDAMX's stream reader for this type of channel.
-        pin : int
-            Device's pin to initialize as analog input channel/s.
-        voltage_range=[-10,10] : list, tuple, optional
-            Range of the analog input channel/s. Each of them should be 
-            a list or tuple of length 2 that contains minimum and maximum 
-            in V.
-        configuration='NRSE' : {'NR', 'R', 'DIFF', 'PSEUDODIFF'}, optional
-            Analog input channel/s terminal configuration.
-        """          
-        
-        self.__device = device
-        self.__task = task
-        self.__streamer = streamer
-        
-        self.pin = pin
-        self.channel = self.__channel__(pin)
-        self.gnd_pin = self.__gnd_pin__()
-
-        ai_channel = self.__task.ai_channels.add_ai_voltage_chan(
-                physical_channel = self.channel,
-                units = nid.constants.VoltageUnits.VOLTS
-                )
-        self.__channel = ai_channel
-        
-        self.configuration = configuration
-        self.input_range = voltage_range
-    
-    @property
-    def streamer(self):
-        return self.__streamer
-    
-    @streamer.setter
-    def streamer(self, streamer):
-        self.__streamer = streamer
-    
-    @property
-    def configuration(self):
-        return self.__configuration
-    
-    @configuration.setter
-    def configuration(self, mode):
-        
-        partial_keys = {
-             ('&', 'ps') : conf.PSEUDODIFFERENTIAL,
-             'dif' : conf.DIFFERENTIAL,
-             ('&', 'n') : conf.NRSE,
-             'r' : conf.RSE,
-             }
-        mode = fst.string_recognizer(mode, partial_keys)
-        
-        if self.__configuration != mode:
-            self.__channel.ai_term_cfg = mode
-            self.__configuration = mode
-    
-    @property
-    def input_range(self):
-        return self.__range
-    
-    @input_range.setter
-    def input_range(self, voltage_range):
-        
-        voltage_range = list(voltage_range)
-        if self.__range != voltage_range:
-            if self.__range[0] != voltage_range[0]:
-                self.input_min = voltage_range[0]
-            if self.__range[1] != voltage_range[1]:
-                self.input_max = voltage_range[1]
-            self.__configuration = voltage_range
-    
-    @property
-    def input_min(self):
-        return self.__input_min
-    
-    @input_min.setter
-    def input_min(self, voltage):
-        
-        if self.__input_min != voltage:
-            self.__channel.ai_min = voltage
-            self.__input_min = voltage
-            self.__range[0] = voltage
-                
-    @property
-    def input_max(self):
-        return self.__input_max
-    
-    @input_max.setter
-    def input_max(self, voltage):
-        
-        if self.__input_max != voltage:
-            self.__channel.ai_max = voltage
-            self.__input_max = voltage
-            self.__range[1] = voltage
-    
-    def __channel__(self, pin):
-        
-        """Transforms from pin to analog input channel.
-        
-        Parameters
-        ----------
-        pin : int
-            Pin (physical channel). Should be an int.
-        
-        Returns
-        -------
-        channel : str
-            Channel. A string "Dev{}/ai{}" formatted by two int.
-        """
-        
-        reference = [15, 17, 19, 21, 24, 26, 29, 31, 
-                     16, 18, 20, 22, 25, 27, 30, 32]
-        
-        try:
-            channel = reference[pin]
-            channel = '{}/ai{}'.format(self.__device, pin)
-            return channel
-        except IndexError:
-            message = "Wrong pin {} for analog input"
-            raise ValueError(message.format(pin))
-    
-    def __diff_gnd_pin__(self, ai_pin):
-        
-        """Returns differential GND for an analog input pin.
-        
-        Parameters
-        ----------
-        ai_pin : int
-            Pin (physical channel) of analog input. Should be int.
-        
-        Returns
-        -------
-        diff_gnd_pin : int
-            Pin (physical channel) of analog input's GND.
-        """
-        
-        reference = [16, 18, 20, 22, 25, 27, 30, 32]
-        
-        try:
-            diff_gnd_pin = reference[ai_pin]
-            return diff_gnd_pin
-        except IndexError:
-            message = "Wrong pin {} for analog input"
-            raise ValueError(message.format(ai_pin))
-
-    def __gnd_pin__(self):
-        if self.configuration == conf.DIFFERENTIAL:
-            return self.__diff_gnd_pin__(self.pin)
-        else:
-            return 28
-            
-#%%
-
-class PWMOutputChannel:
-
-    def __init__(self, device, task, streamer, pin,
-                 frequency=100e3, 
-                 duty_cycle=0.5):
-
-        """Initializes PWM digital output channel.
-        
-        Parameters
-        ----------
-        device : str
-            NI device's name where PWM output channel/s should be put.
-        task : nidaqmx.Task()
-            NIDAQMX's task where this channels should be added.
-        streamer : nidaqmx.stream_writers class
-            NIDAMX's stream writer for this type of channel.
-        pin : int
-            Device's pin to initialize as PWM output channel/s.
-        frequency=100e3 : int, float, optional
-            PWM's main frequency.
-        duty_cycle=.5 : int, float, {0 <= duty_cycle <= 1}, optional
-            PWM's duty cycle, which defines mean value of signal as 
-            'duty_cycle*max' where 'max' is the '+5' voltage.        
-        """          
-        
-        self.__device = device
-        self.__task = task
-        self.__streamer = streamer
-        
-        self.pin = pin
-        self.channel = self.__channel__(pin)
-        self.low = [5, 11, 37, 43]
-        self.high = [10, 42]
-        
-        ai_channel = self.__task.ai_channels.add_ai_voltage_chan(
-                physical_channel = self.channel,
-                units = nid.constants.VoltageUnits.VOLTS
-                )
-        self.__channel = ai_channel
-        self.__task.timing.cfg_implicit_timing(
-            sample_mode = nid.constants.AcquisitionType.CONTINUOUS)
-        
-        self.frequency = frequency
-        self.duty_cycle = duty_cycle
-    
-    @property
-    def streamer(self):
-        return self.__streamer
-    
-    @streamer.setter
-    def streamer(self, streamer):
-        self.__streamer = streamer
-    
-    @property
-    def duty_cycle(self):
-        return self.__duty_cycle
-    
-    @duty_cycle.setter
-    def duty_cycle(self, value):
-        
-        if self.__duty_cycle != value:
-            self.__channel.co_pulse_duty_cyc = value
-            self.__duty_cycle = value
-            if self.status:
-                self.status = 'R'
-                
-    @property
-    def frequency(self):
-        return self.__frequency
-    
-    @frequency.setter
-    def frequency(self, value):
-        
-        if self.__frequency != value:
-            self.__channel.co_pulse_freq = value
-            self.__frequency = value
-            if self.status:
-                self.status = 'R'
-    
-    @property
-    def status(self):
-        return self.__status
-
-    @status.setter
-    def status(self, key):
-        
-        if isinstance(key, str):
-            self.__streamer.write_one_sample_pulse_frequency(
-                frequency = self.frequency,
-                duty_cycle = self.duty_cycle,
-                )
-        elif isinstance(key, bool):
-            if self.__status != key:
-                if key:
-                    self.__task.start()
-                    self.__stream.write_one_sample_pulse_frequency(
-                        frequency = self.frequency,
-                        duty_cycle = self.duty_cycle,
-                        )
-                else:
-                    self.__task.end()
-                self.__status = key
-    
-    def __channel__(self, pin):
-        
-        """Transforms from pin to PWM digital output channel.
-        
-        Parameters
-        ----------
-        pin : int, list
-            Pin (physical channel). Should be an int.
-        
-        Returns
-        -------
-        channel : str, list
-            Channel. A string "Dev{}/ctr{}" formatted by two int.
-        """
-        
-        reference = [1, 2, 3, 4, 6, 7, 8, 9, 33, 
-                     34, 35, 36, 38, 39, 40, 41]
-        
-        try:
-            channel = reference[pin]
-            channel = '{}/ctr{}'.format(self.__device, pin)
-            return channel
-        except IndexError:
-            message = "Wrong pin {} for digital input"
-            raise ValueError(message.format(pin))
+"""Here starts a really old version made of functions"""
 
 #%%
 

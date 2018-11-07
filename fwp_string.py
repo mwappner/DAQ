@@ -364,7 +364,6 @@ def string_recognizer(string, partial_keys,
     non_priorized_keys = {}
     for key, value in partial_keys.items():
         if not isinstance(key, tuple):
-            print(key)
             non_priorized_keys.update({tuple([key]) : value})
         else:
             non_priorized_keys.update({key : value})
