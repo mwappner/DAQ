@@ -259,7 +259,7 @@ ai_conf = 'Dif' # measures in differential mode
 
 device = daq.devices()[0]
 
-nsamples = 200e3
+nsamples = int(200e3)
 
 with daq.Task(device, mode='r') as task:
     
@@ -267,9 +267,9 @@ with daq.Task(device, mode='r') as task:
     task.add_channels(fch.AnalogInputChannel, *ai_pins)
     task.all.configuration = ai_conf
     
-    signal = task.read(nsamplestotal=nsamples,
+    signal = task.read(nsamples_total=nsamples,
                        samplerate=None) # None means maximum SR
-    
+                       
     task.close()
 
 #%% Whith newer module too!
@@ -281,15 +281,13 @@ ai_conf = 'Dif' # measures in differential mode
 
 device = daq.devices()[0]
 
-nsamples = 200e3
-
 with daq.Task(device, mode='r') as task:
     
     # Configure clock output
     task.add_channels(fch.AnalogInputChannel, *ai_pins)
     task.all.configuration = ai_conf
     
-    signal = task.read(nsamplestotal=None, # None menas continuous
+    signal = task.read(nsamples_total=None, # None means continuous
                        samplerate=None) # None means maximum SR
     
     task.close()
@@ -298,7 +296,7 @@ with daq.Task(device, mode='r') as task:
 
 ai_pin = 15 # default mode is non referenced
 
-pwm_pin = 1 # Literally the number of the DAQ pin
+pwm_pin = 1 # literally the number of the DAQ pin
 pwm_frequency = 100e3
 pwm_duty_cycle = np.linspace(.1,1,10)
 
