@@ -89,15 +89,15 @@ class DAQ:
         return self.__pins
     
     @pins.setter
-    def pins(self, value):
-        raise ValueError("You shouldn't modify this manually!")
+    def pins(self, value=None):
+        raise AttributeError("You shouldn't modify this manually!")
     
     @property
     def ninputs(self):
         return self.__ninputs
     
     @ninputs.setter
-    def ninputs(self, value):
+    def ninputs(self, value=None):
         self.__print__("Can't modify this manually. Auto-updating...")
         channels = [k for k,v in self.pins.items() if 'in' in v.lower()]
         self.__ninputs = len(channels)
@@ -107,7 +107,7 @@ class DAQ:
         return self.__noutputs
     
     @noutputs.setter
-    def noutputs(self, value):
+    def noutputs(self, value=None):
         self.__print__("Can't modify this manually. Auto-updating...")
         channels = [k for k,v in self.pins.items() if 'out' in v.lower()]
         self.__noutputs = len(channels)
@@ -117,7 +117,7 @@ class DAQ:
         return self.__analog_inputs
     
     @analog_inputs.setter
-    def analog_inputs(self, values):
+    def analog_inputs(self, value=None):
         raise AttributeError("Must use 'add_analog_inputs'!")
 
     def add_analog_inputs(self, *pins, **kwargs):
@@ -132,7 +132,7 @@ class DAQ:
         return self.__pwm_outputs
     
     @pwm_outputs.setter
-    def pwm_outputs(self, values):
+    def pwm_outputs(self, value=None):
         raise AttributeError("Must use 'add_pwm_outputs'!")
 
     def add_pwm_outputs(self, *pins, **kwargs):

@@ -353,9 +353,9 @@ class Gen:
     
     Methods
     -------
-    Gen.output(1, int, waveform=str)
+    Gen.output(True, int, waveform=str)
         Turns on channel 'int' with a signal descripted by 'str'.
-    Gen.output(0, int)
+    Gen.output(False, int)
         Turns off channel 'int'.
     Gen.config_output[int]['Status']
         Returns bool saying whether channel 'int' is on or off.
@@ -363,22 +363,22 @@ class Gen:
     Examples
     --------
     >> gen = Gen(port='USB0::0x0699::0x0363::C108013::INSTR')
-    >> Gen.output(1, 1, waveform='sin', frequency=1e3)
+    >> gen.output(True, 1, waveform='sin', frequency=1e3)
     {turns on channel 1 with a 1kHz sinusoidal wave}
-    >> Gen.output(1, 1, waveform='squ')
+    >> gen.output(True, 1, waveform='squ')
     {keeps channel 1 on but modifies waveform to a square wave}
-    >> Gen.output(0)
+    >> gen.output(False)
     {turns off channel 1}
 
     """
     
     def __init__(self, port, nchannels):
 
-        """Defines oscilloscope object and opens it as Visa resource.
+        """Defines function generator object and opens it as Visa resource.
         
         It also defines the following attributes:
                 'Gen.port' (PC's port where it is connected)
-                'Gen.osci' (PyVISA object)
+                'Gen.gen' (PyVISA object)
                 'Gen.config_output' (Outputs' current 
                 configuration)
         
