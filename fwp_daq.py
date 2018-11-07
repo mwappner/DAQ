@@ -238,7 +238,15 @@ class Task:
         self.pins = WrapperDict()
         self.__nchannels = 0
         
-        self.streamer = True
+        self.streamer = True        
+    
+    def __enter__(self):
+        return self
+#        return self.__task
+
+    def __exit__(self, type, value, traceback):
+        self.close()
+#        self.__task.close()
     
     @property
     def nchannels(self):
@@ -367,7 +375,7 @@ class Task:
                         self.__streamer.read_many_sample(
                             each_signal, 
                             number_of_samples_per_channel=nsamples_each,
-                            timeout=2)
+                            timeout=20)
                     signal = multiappend(signal, each_signal)
                     nbuffers = nbuffers + 1
                     self.__print__("Number of buffers: " + nbuffers)
@@ -384,7 +392,7 @@ class Task:
                 self.__streamer.read_many_sample(
                     signal, 
                     number_of_samples_per_channel=nsamples_total,
-                    timeout=2)
+                    timeout=20)
                 self.__task.stop()
             else:
                 self.__print__("Should 'start'+'read_many...'+'stop'")

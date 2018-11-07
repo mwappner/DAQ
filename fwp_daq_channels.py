@@ -67,9 +67,9 @@ class AnalogInputChannel:
         else:
             self.__channel = None
             self.__print__("Should 'add_ai_voltage...'")
-        
-        self.__configuration = configuration
-        self.__range = voltage_range
+            
+        self.configuration = configuration
+        self.input_range = voltage_range
         
         self.gnd_pin = self.__gnd_pin__()
     
@@ -96,6 +96,11 @@ class AnalogInputChannel:
              }
         mode = fst.string_recognizer(mode, partial_keys)
         
+        try:
+            self.__configuration
+        except:
+            self.__configuration = None
+        
         if self.__configuration != mode:
             if self.conection:
                 self.__channel.ai_term_cfg = mode
@@ -111,12 +116,18 @@ class AnalogInputChannel:
     def input_range(self, voltage_range):
         
         voltage_range = list(voltage_range)
+        
+        try:
+            self.__range
+        except:
+            self.__range = [None, None]
+        
         if self.__range != voltage_range:
             if self.__range[0] != voltage_range[0]:
                 self.input_min = voltage_range[0]
             if self.__range[1] != voltage_range[1]:
                 self.input_max = voltage_range[1]
-            self.__configuration = voltage_range
+            self.__range = voltage_range
     
     @property
     def input_min(self):
@@ -124,6 +135,11 @@ class AnalogInputChannel:
     
     @input_min.setter
     def input_min(self, voltage):
+        
+        try:
+            self.__input_min
+        except:
+            self.__input_min = None
         
         if self.__input_min != voltage:
             if self.conection:
@@ -139,6 +155,11 @@ class AnalogInputChannel:
     
     @input_max.setter
     def input_max(self, voltage):
+
+        try:
+            self.__input_max
+        except:
+            self.__input_max = None
         
         if self.__input_max != voltage:
             if self.conection:
