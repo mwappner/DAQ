@@ -750,5 +750,16 @@ class PIDController:
         return (self.kp * self.p_term) + (self.ki * self.i_term) + (self.kd * self.d_term)
 
 
-
+#%%
+        
+def set_bewtween(value, lower=0, upper=100):
     
+    value = max(lower, value)
+    value = min(upper, value)
+    return value
+
+def append_data_to_string(*args):
+    out = ''
+    for value in args:
+        out += '\t' + str(value)
+    return out
