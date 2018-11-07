@@ -7,12 +7,15 @@ This script is to make measurements with a National Instruments DAQ.
 
 import fwp_daq as daq
 import fwp_daq_channels as fch
+import numpy as np
+
+#%%
+
 import fwp_save as sav
 import nidaqmx as nid
 from nidaqmx import stream_readers as sr
 from nidaqmx import stream_writers as sw
 from nidaqmx.utils import flatten_channel_string
-import numpy as np
 from time import sleep
 import fwp_wavemaker as wm
 
@@ -254,24 +257,25 @@ with daq.Task(device, mode='w') as task:
 
 """Makes a single measurement on analog input/s."""
 
-ai_pins = [15, 17]
-ai_conf = 'Dif' # measures in differential mode
+ai_pins = [15]#, 16]#17]
+ai_conf = 'Ref'
 
 device = daq.devices()[0]
 
 nsamples = int(200e3)
 
-with daq.Task(device, mode='r') as task:
-    
-    # Configure clock output
-    task.add_channels(fch.AnalogInputChannel, *ai_pins)
-    task.all.configuration = ai_conf
-    
-    signal = task.read(nsamples_total=nsamples,
-                       samplerate=None) # None means maximum SR
-                       
-    task.close()
+task = daq.Task(device, mode='r')
 
+#with daq.Task(device, mode='r') as task:
+        
+# Configure clock output
+task.add_channels(fch.AnalogInputChannel, *ai_pins)
+
+signal = task.read(nsamples_total=10000, # 2 ch => 29500 sí, 30000 no
+                   samplerate=None) # None means maximum SR
+
+#task.close()
+                   
 #%% Whith newer module too!
 
 """Makes a continuous measurement on analog input/s."""
