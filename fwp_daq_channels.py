@@ -48,10 +48,15 @@ class AnalogInputChannel:
         self.__device = device
         self.__task = task
         self.__streamer = streamer
+
+        self.conection = conection
+        if not conection:
+            self.print = True
+        else:
+            self.print = print_messages
         
         self.pin = pin
         self.channel = self.__channel__(pin)
-        self.gnd_pin = self.__gnd_pin__()
 
         if conection:
             ai_channel = self.__task.ai_channels.add_ai_voltage_chan(
@@ -63,14 +68,10 @@ class AnalogInputChannel:
             self.__channel = None
             self.__print__("Should 'add_ai_voltage...'")
         
-        self.configuration = configuration
-        self.input_range = voltage_range
+        self.__configuration = configuration
+        self.__range = voltage_range
         
-        self.conection = conection
-        if conection:
-            self.print = True
-        else:
-            self.print = print_messages
+        self.gnd_pin = self.__gnd_pin__()
     
     @property
     def streamer(self):
@@ -167,7 +168,7 @@ class AnalogInputChannel:
         
         try:
             channel = reference.index(pin)
-            channel = '{}/ai{}'.format(self.__device, pin)
+            channel = '{}/ai{}'.format(self.__device, channel)
             return channel
         except IndexError:
             message = "Wrong pin {} for analog input"
@@ -188,12 +189,13 @@ class AnalogInputChannel:
             Pin (physical channel) of analog input's GND.
         """
         
-        reference = [16, 18, 20, 22, 25, 27, 30, 32]
+        reference = {15:16, 17:18, 19:20, 21:22, 
+                     24:25, 26:27, 29:30, 31:32}
         
         try:
             diff_gnd_pin = reference[ai_pin]
             return diff_gnd_pin
-        except IndexError:
+        except ValueError:
             message = "Wrong pin {} for analog input"
             raise ValueError(message.format(ai_pin))
 
@@ -244,11 +246,17 @@ class PWMOutputChannel:
         self.__device = device
         self.__task = task
         self.__streamer = streamer
+
+        self.conection = conection
+        if not conection:
+            self.print = True
+        else:
+            self.print = print_messages
         
         self.pin = pin
         self.channel = self.__channel__(pin)
-        self.low = [5, 11, 37, 43]
-        self.high = [10, 42]
+        self.low = 37#[5, 11, 37, 43]
+        self.high = 42#[10, 42]
         
         if conection:
             ai_channel = self.__task.co_channels.add_co_pulse_chan_freq(
@@ -262,14 +270,9 @@ class PWMOutputChannel:
             self.__channel = None
             print("Should 'add_co_pulse_chan...'+'timing.cfg_impli...'")
         
-        self.frequency = frequency
-        self.duty_cycle = duty_cycle
-        
-        self.conection = conection
-        if conection:
-            self.print = True
-        else:
-            self.print = print_messages
+        self.__frequency = frequency
+        self.__duty_cycle = duty_cycle
+        self.__status = False
     
     @property
     def streamer(self):
@@ -330,7 +333,10 @@ class PWMOutputChannel:
                     self.__task.end()
             else:
                 self.__print__("Should 'start' or 'stop'")
-            self.__status = key
+            if isinstance(key, str):
+                self.__status = True
+            else:
+                self.__status = key
     
     def __channel__(self, pin):
         
@@ -347,14 +353,15 @@ class PWMOutputChannel:
             Channel. A string "Dev{}/ctr{}" formatted by two int.
         """
         
-        reference = [1, 2, 3, 4, 6, 7, 8, 9, 33, 
-                     34, 35, 36, 38, 39, 40, 41]
+        reference = [38, 39]
+#        reference = [1, 2, 3, 4, 6, 7, 8, 9, 33, 
+#                     34, 35, 36, 38, 39, 40, 41]
         
         try:
             channel = reference.index(pin)
-            channel = '{}/ctr{}'.format(self.__device, pin)
+            channel = '{}/ctr{}'.format(self.__device, channel)
             return channel
-        except IndexError:
+        except ValueError:
             message = "Wrong pin {} for digital input"
             raise ValueError(message.format(pin))
     
