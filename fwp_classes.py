@@ -344,12 +344,6 @@ class WrapperDict(dict):
     >> Z.prop
     {'a': 10, 'b': 2, 'c': 1}
     
-    Warnings
-    --------
-    >> Z.prop = [2, 3]
-    >> Z.prop
-    [[2,3], [2,3], [2,3]]
-    
     """
 
     def __init__(self, **elements):
@@ -462,6 +456,93 @@ class DottableWrapper:
         instances = dict(instances)
         self.__dict__.update(instances)
         self.all.update(instances)
+
+class DottableMultiWrapper():
+    
+    """A class that holds several dot-callable dict of instances.
+    
+    Examples
+    --------
+    >> class ItemClass:
+    
+        def __init__(self, sumando=10):
+            self.sumando = sumando
+        
+        def sum(self, item):
+            return item + self.sumando
+    
+    >> class OtherItemClass:
+
+        def __init__(self, restando=10):
+            self.restando = restando
+        
+        def rest(self, item):
+            return item - self.restando
+        
+    >> Z = DottableMultiWrapper(a=ItemClass(), b=ItemClass(2))
+    >>
+    >> # Let's check dot calling
+    >> Z.a.sumando
+    10
+    >> Z.a.sumando = 1
+    >> Z.a.sumando
+    1
+    >>
+    >> # Let's check dot calling all instances at once
+    >> Z.all.sumando
+    {'a': 1, 'b': 2}
+    >> Z.all.sumando = 3
+    >> Z.all.sumando
+    {'a': 3, 'b': 3}
+    >> Z.all.sumando = {'a': 1}
+    >> Z.all.sumando
+    {'a': 1, 'b': 3}
+    >> 
+    >> # This also works with methods
+    >> Z.all.sumando
+    1
+    >> Z.all.sum(2)
+    3
+    >> Z.all.sumando
+    {'a': 10, 'b': 3}
+    >> Z.all.sum(2)
+    {'a': 3, 'b': 5}
+    >>
+    >> # This is an updatable class too
+    >> Z.add(c=ItemClass(4))
+    >> Z.all.sumando
+    {'a': 1, 'b': 3, 'c': 4}
+    >> Z.all.sumando
+    4
+    >>
+    >> # This class allows to keep adding other instances
+    >> Z.add(alias='r', separator='',
+             **{'1': OtherItemClass(1), '2': OtherItemClass(2)})
+    >> Z.r.rest(5)
+    {'1': 4, '2': 3}
+    
+    """
+    
+    def __init__(self, alias='all', separator=None, **instances):
+        
+        if instances != {}:
+            self.add(alias, separator, **instances)
+    
+    def add(self, alias='all', separator=None, **instances):
+        
+        try:
+            eval('self.{}'.format(alias))
+        except:
+            self.__setattr__(alias, WrapperDict())
+        eval('self.{}.update(instances)'.format(alias))
+        
+        if separator is not None:
+            instances = {alias+separator+k: v 
+                         for k, v in instances.items()}
+            
+        instances = dict(instances)
+        self.__dict__.update(instances)
+
 
 ## Old class
 #class ClassWithInstances:
@@ -741,7 +822,7 @@ class MultiWrapper(BigClass):
     30
     >>
     >> # Now let's add instances of another class
-    >> Z.add('s', sa=ItemClass(), sb=ItemClass(2))
+    >> Z.add('s', a=ItemClass(), b=ItemClass(2))
     >>
     >> # Let's check dot calling
     >> Z.sa.sumando
@@ -752,13 +833,13 @@ class MultiWrapper(BigClass):
     >>
     >> # Let's check dot calling all instances at once
     >> Z.s.sumando
-    {'sa': 1, 'sb': 2}
+    {'a': 1, 'b': 2}
     >> Z.s.sumando = 3
     >> Z.s.sumando
-    {'sa': 3, 'sb': 3}
+    {'a': 3, 'b': 3}
     >> Z.s.sumando = {'sa': 1}
     >> Z.s.sumando
-    {'sa': 1, 'sb': 3}
+    {'a': 1, 'b': 3}
     >> 
     >> # This also works with methods
     >> Z.sa.sumando
@@ -778,8 +859,9 @@ class MultiWrapper(BigClass):
     4
     >>
     >> # This class allows to keep adding other instances
-    >> Z.add('r', ra=OtherItemClass(1), rb=OtherItemClass(2))
-    >> Z.r.rest(5)
+    >> Z.add(alias='r', 
+             **{'1': OtherItemClass(1), '2': OtherItemClass(2)})
+    >> Z.r1.rest(5)
     {'ra': 4, 'rb': 3}
     
     """
@@ -788,17 +870,19 @@ class MultiWrapper(BigClass):
         
         super().__init__(*args, **kwargs)
     
-    def add(self, alias, **instances):
+    def add(self, alias='all', separator='', **instances):
         
         try:
             eval('self.{}'.format(alias))
         except:
             self.__setattr__(alias, WrapperDict())
-                
+        eval('self.{}.update(instances)'.format(alias))
+        
+        instances = {alias+separator+k: v for k, v in instances.items()}
+            
         instances = dict(instances)
         self.__dict__.update(instances)
         
-        eval('self.{}.update(instances)'.format(alias))
 
 #%%
 
