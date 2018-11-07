@@ -193,35 +193,37 @@ with nid.Task() as write_task, nid.Task() as read_task:
 
 #%% With new module!!! Change PWM mean value
 
-pwm_pin = 1 # Clock output
-pwm_frequency = 100
-pwm_duty_cycle = np.linspace(.1,1,10)
-
-device = daq.devices()[0]
-
-with daq.OldTask(device, mode='w') as task:
-    
-    # Configure clock output
-    task.add_channels(fch.PWMOutputChannel, pwm_pin)
-    task.pins[pwm_pin].frequency = pwm_frequency
-    task.pins[pwm_pin].duty_cycle = pwm_duty_cycle[0]
-    """Could do all this together:
-    task.add_channels(fch.PWMOutputChannel, pwm_pin,
-                      frequency = pwm_frequency,
-                      duty_cycle = pwm_duty_cycle)
-    """    
-    
-    task.pins(pwm_pin).status = True
-    for dc in pwm_duty_cycle:
-        task.pins[pwm_pin].duty_cycle = dc
-        print("Hope I changed duty cycle to {:.2f} x'D".format(dc))
-        sleep(3)
-    task.pins(pwm_pin).status = False
+#pwm_pin = 1 # Clock output
+#pwm_frequency = 100e3
+#pwm_duty_cycle = np.linspace(.1,1,10)
+#
+#device = daq.devices()[0]
+#
+#with daq.OldTask(device, mode='w') as task:
+#    
+#    # Configure clock output
+#    task.add_channels(fch.PWMOutputChannel, pwm_pin)
+#    task.pins[pwm_pin].frequency = pwm_frequency
+#    task.pins[pwm_pin].duty_cycle = pwm_duty_cycle[0]
+#    """Could do all this together:
+#    task.add_channels(fch.PWMOutputChannel, pwm_pin,
+#                      frequency = pwm_frequency,
+#                      duty_cycle = pwm_duty_cycle)
+#    """    
+#    
+#    task.pins(pwm_pin).status = True
+#    for dc in pwm_duty_cycle:
+#        task.pins[pwm_pin].duty_cycle = dc
+#        print("Hope I changed duty cycle to {:.2f} x'D".format(dc))
+#        sleep(3)
+#    task.pins(pwm_pin).status = False
 
 #%% With newer module!
 
-pwm_pin = 1 # Clock output
-pwm_frequency = 100
+"""Makes loop changing PWM output's duty cycle and therefore mean value"""
+
+pwm_pin = 1 # Literally the number of the DAQ pin
+pwm_frequency = 100e3
 pwm_duty_cycle = np.linspace(.1,1,10)
 
 device = daq.devices()[0]
@@ -241,6 +243,107 @@ with daq.Task(device, mode='w') as task:
     task.all.status = True
     for dc in pwm_duty_cycle:
         task.all.duty_cycle = dc
-        print("Hope I changed duty cycle to {:.2f} x'D".format(dc))
+        """ Could also call by channel:
+        task.ctr0.duty_cycle = dc
+        """
         sleep(3)
     task.all.status = False
+    task.close()
+
+#%% Whith newer module too!
+
+"""Makes a single measurement on analog input/s."""
+
+ai_pins = [15, 17]
+ai_conf = 'Dif' # measures in differential mode
+
+device = daq.devices()[0]
+
+nsamples = 200e3
+
+with daq.Task(device, mode='r') as task:
+    
+    # Configure clock output
+    task.add_channels(fch.AnalogInputChannel, *ai_pins)
+    task.all.configuration = ai_conf
+    
+    signal = task.read(nsamplestotal=nsamples,
+                       samplerate=None) # None means maximum SR
+    
+    task.close()
+
+#%% Whith newer module too!
+
+"""Makes a continuous measurement on analog input/s."""
+
+ai_pins = [15, 17]
+ai_conf = 'Dif' # measures in differential mode
+
+device = daq.devices()[0]
+
+nsamples = 200e3
+
+with daq.Task(device, mode='r') as task:
+    
+    # Configure clock output
+    task.add_channels(fch.AnalogInputChannel, *ai_pins)
+    task.all.configuration = ai_conf
+    
+    signal = task.read(nsamplestotal=None, # None menas continuous
+                       samplerate=None) # None means maximum SR
+    
+    task.close()
+
+#%% Prototype of control loop with new module!
+
+ai_pin = 15 # default mode is non referenced
+
+pwm_pin = 1 # Literally the number of the DAQ pin
+pwm_frequency = 100e3
+pwm_duty_cycle = np.linspace(.1,1,10)
+
+device = daq.devices()[0]
+
+nsamples_callback = 20
+
+with daq.DAQ(device) as task:
+
+    def callback(task_handle, every_n_samples_event_type,
+                 number_of_samples, callback_data):
+        
+        task.__print__('Every N Samples callback invoked.')
+    
+        samples = task.read(nsamples_total=20,
+                            samplerate=None) # None means maximum
+        
+        global output_array
+        non_local_var['samples'].extend(samples)
+        
+        if max(samples) > (pidvalue+0.1):
+            delta = max(samples) - pidvalue
+            output_array -= pidconstant * delta
+            
+        elif max(samples) < (pidvalue-0.1):
+             delta = pidvalue - max(samples)
+             output_array += pidconstant * delta
+             
+        return 0
+    
+    # Add channels
+    task.add_analog_inputs(ai_pin)
+    task.add_pwm_outputs(pwm_pin)
+    
+    # Configure all outputs    
+    task.outputs.frequency = pwm_frequency
+    task.outputs.duty_cycle = pwm_duty_cycle
+    
+    # Turn on outputs
+    task.outputs.status = True
+    
+    # Start measurement
+    signal = task.inputs.read(nsamples_total=None,
+                              nsamples_callback=nsamples_callback,
+                              callback=callback)
+    
+    task.output.status = False
+    task.close()
