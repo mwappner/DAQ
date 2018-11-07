@@ -5,11 +5,9 @@ This script is to make measurements with a National Instruments DAQ.
 @author: GrupoFWP
 """
 
-#import fwp_analysis as anly
 import fwp_daq as daq
+import fwp_daq_channels as fch
 import fwp_save as sav
-#import matplotlib.pyplot as plt
-#import os
 import nidaqmx as nid
 from nidaqmx import stream_readers as sr
 from nidaqmx import stream_writers as sw
@@ -193,22 +191,22 @@ with nid.Task() as write_task, nid.Task() as read_task:
 #    data = np.array([time, signal]).T
 #np.savetxt(filename(nchannels), data, header=header)
 
-#%% With new module!!! Change PWM mean value --> Option 1
+#%% With new module!!! Change PWM mean value
 
-pwm_pin = 0 # Clock output
+pwm_pin = 1 # Clock output
 pwm_frequency = 100
 pwm_duty_cycle = np.linspace(.1,1,10)
 
 device = daq.devices()[0]
 
-with daq.Task(device, mode='w') as task:
+with daq.OldTask(device, mode='w') as task:
     
     # Configure clock output
-    task.add_channels(daq.PWMOutputChannel, pwm_pin)
+    task.add_channels(fch.PWMOutputChannel, pwm_pin)
     task.pins[pwm_pin].frequency = pwm_frequency
     task.pins[pwm_pin].duty_cycle = pwm_duty_cycle[0]
     """Could do all this together:
-    task.add_channels(daq.PWMOutputChannel, pwm_pin,
+    task.add_channels(fch.PWMOutputChannel, pwm_pin,
                       frequency = pwm_frequency,
                       duty_cycle = pwm_duty_cycle)
     """    
@@ -219,3 +217,30 @@ with daq.Task(device, mode='w') as task:
         print("Hope I changed duty cycle to {:.2f} x'D".format(dc))
         sleep(3)
     task.pins(pwm_pin).status = False
+
+#%% With newer module!
+
+pwm_pin = 1 # Clock output
+pwm_frequency = 100
+pwm_duty_cycle = np.linspace(.1,1,10)
+
+device = daq.devices()[0]
+
+with daq.Task(device, mode='w') as task:
+    
+    # Configure clock output
+    task.add_channels(fch.PWMOutputChannel, pwm_pin)
+    task.all.frequency = pwm_frequency
+    task.all.duty_cycle = pwm_duty_cycle[0]
+    """Could do all this together:
+    task.add_channels(fch.PWMOutputChannel, pwm_pin,
+                      frequency = pwm_frequency,
+                      duty_cycle = pwm_duty_cycle)
+    """    
+    
+    task.all.status = True
+    for dc in pwm_duty_cycle:
+        task.all.duty_cycle = dc
+        print("Hope I changed duty cycle to {:.2f} x'D".format(dc))
+        sleep(3)
+    task.all.status = False
