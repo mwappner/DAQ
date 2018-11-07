@@ -8,6 +8,7 @@ This script is to make measurements with a National Instruments DAQ.
 import fwp_daq as daq
 import fwp_daq_channels as fch
 import fwp_save as sav
+import fwp_analysis as fan
 import nidaqmx as nid
 from nidaqmx import stream_readers as sr
 from nidaqmx import stream_writers as sw
@@ -15,6 +16,8 @@ from nidaqmx.utils import flatten_channel_string
 import numpy as np
 from time import sleep
 import fwp_wavemaker as wm
+
+
 
 #%% Just turn on a PWM signal
 
@@ -298,34 +301,31 @@ ai_pin = 15 # default mode is non referenced
 
 pwm_pin = 1 # literally the number of the DAQ pin
 pwm_frequency = 100e3
-pwm_duty_cycle = np.linspace(.1,1,10)
+pwm_default_duty_cycle = np.linspace(.1,1,10)
+wheel_radius = 0.025 #in meters
 
 device = daq.devices()[0]
 
 nsamples_callback = 20
+samplingrate = 100e3
 
-with daq.DAQ(device) as task:
+pid = fan.PIDController(setpoint=1, kp=10, ki=5, kd=7, dt=1/samplingrate)
 
+with daq.DAQ(device) as task, open('log.txt', 'w') as file:
+
+    file.write('Vel\t duty_cycle\t P\t I\t D')
     def callback(task_handle, every_n_samples_event_type,
                  number_of_samples, callback_data):
-        
-        task.__print__('Every N Samples callback invoked.')
-    
-        samples = task.read(nsamples_total=20,
-                            samplerate=None) # None means maximum
-        
-        global output_array
-        non_local_var['samples'].extend(samples)
-        
-        if max(samples) > (pidvalue+0.1):
-            delta = max(samples) - pidvalue
-            output_array -= pidconstant * delta
             
-        elif max(samples) < (pidvalue-0.1):
-             delta = pidvalue - max(samples)
-             output_array += pidconstant * delta
-             
-        return 0
+        samples = task.read(nsamples_total=200,
+                            samplerate=samplingrate) # None means maximum
+        vel = fan.peak_separation(samples, pid.dt, prominence=.5) * wheel_radius
+        new_dc = pid.calculate(vel)
+        
+        data = fan.append_data_to_string(vel, new_dc, pid.p_term, pid.i_term, pid.d_term)
+        file.write(data)
+        
+        task.ouputs.duty_cycle = fan.set_bewtween(new_dc, *(0,100))    
     
     # Add channels
     task.add_analog_inputs(ai_pin)
@@ -333,7 +333,7 @@ with daq.DAQ(device) as task:
     
     # Configure all outputs    
     task.outputs.frequency = pwm_frequency
-    task.outputs.duty_cycle = pwm_duty_cycle
+    task.outputs.duty_cycle = pwm_default_duty_cycle
     
     # Turn on outputs
     task.outputs.status = True
