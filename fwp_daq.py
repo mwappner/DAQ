@@ -6,7 +6,7 @@ Based on https://github.com/fotonicaOrg/daq.git from commit 387c7c3
 
 """
 
-from fwp_classes import DynamicDict, WrapperDict
+from fwp_classes import WrapperDict
 import fwp_daq_channels as fch
 import numpy as np
 import nidaqmx as nid
@@ -83,13 +83,8 @@ def devices():
         dev = str(dev)
         dev = dev.split('=')[-1].split(')')[0]
         devices.append(dev)
-        print(dev)
     
     return devices
-
-#%%
-
-"""Here starts the newer version"""
 
 #%%
 
@@ -121,17 +116,16 @@ class DAQ:
         else:
             self.print = print_messages
         
-        self.tasks = WrapperDict(
-                
-            __inputs = Task(self.device,
+        self.__inputs = Task(self.__device,
                             mode='r',
                             print_messages=print_messages,
-                            conection=conection),
-            __outputs = Task(self.device,
+                            conection=conection)
+        self.__outputs = Task(self.__device,
                              mode='w',
                              print_messages=print_messages,
                              conection=conection)
-            )
+        self.tasks = WrapperDict(inputs = self.inputs,
+                                 outputs = self.outputs)
     
     @property
     def inputs(self):
@@ -327,7 +321,7 @@ class Task:
     
     def read(self, nsamples_total=None, samplerate=None,
              nsamples_callback=None, callback=None,
-             nsamples_each=20):
+             nsamples_each=200):
         
         if self.write_mode:
             raise TypeError("This task is meant to write!")
@@ -335,7 +329,8 @@ class Task:
         if samplerate is None:
             
             samplerate = int(400e3/self.nchannels)
-        
+#            task.streamer._in_stream.input_buf_size
+
         if callback is not None:
     
             if self.conection:
@@ -344,7 +339,7 @@ class Task:
                     callback)
             else:
                 self.__print__("Should 'task.register_every...'")
-            nsamples_each = nsamples_callback
+#            nsamples_each = nsamples_callback
             self.__print__("Each time, I take nsamples_callback")
 
         if nsamples_total is None:
@@ -378,7 +373,8 @@ class Task:
                             timeout=20)
                     signal = multiappend(signal, each_signal)
                     nbuffers = nbuffers + 1
-                    self.__print__("Number of buffers: " + nbuffers)
+                    self.__print__("Number of buffers: {}".format(
+                            nbuffers))
                 except KeyboardInterrupt:
                     self.__task.stop()
                     return signal
@@ -413,6 +409,12 @@ class Task:
             self.all.duty_cycle = duty_cycle
         self.all.status = status
     
+    def start(self):
+        self.__task.start()
+    
+    def stop(self):
+        self.__task.stop()
+    
     def close(self):
         self.__task.close()
     
@@ -420,401 +422,3 @@ class Task:
         
         if self.print:
             print(message)
-
-#%%
-
-"""Here starts an older version of the same classes"""
-
-#%%
-
-class OldDAQ:
-    
-    def __init__(self, device, print_messages=False):
-        
-        self.__device = device
-        self.writer()
-        self.reader()
-        
-        self.__rtask = OldTask(self.device,
-                               self.reader,
-                               False,
-                               print_messages)
-        self.__wtask = OldTask(self.device,
-                               self.writer,
-                               True,
-                               print_messages)
-        
-        self.__analog_inputs = DynamicDict()
-        self.__pwm_outputs = DynamicDict()
-                
-        self.print = print_messages
-    
-    @property
-    def ninputs(self):
-        return self.inputs.nchannels
-    
-    @ninputs.setter
-    def ninputs(self, value):
-        raise AttributeError("Can't modify this manually")
-
-    @property
-    def noutputs(self):
-        return self.outputs.nchannels
-    
-    @noutputs.setter
-    def noutputs(self, value):
-        raise AttributeError("Can't modify this manually")
-    
-    @property
-    def analog_inputs(self):
-        return self.__analog_inputs
-    
-    @analog_inputs.setter
-    def analog_inputs(self, values):
-        raise AttributeError("Must use 'add_analog_inputs'!")
-
-    def add_analog_inputs(self, *pins, **kwargs):
-        new_channels = self.__rtask.add_channels(fch.AnalogInputChannel, 
-                                                 *pins, **kwargs)
-        self.reader()
-        self.__pins.update(new_channels)
-        self.__analog_inputs.update(new_channels)
-    
-    @property
-    def pwm_outputs(self, *pins, **kwargs):
-        return self.__pwm_outputs
-    
-    @pwm_outputs.setter
-    def pwm_outputs(self, values):
-        raise AttributeError("Must use 'add_pwm_outputs'!")
-
-    def add_pwm_outputs(self, *pins, **kwargs):
-        new_channels = self.__wtask.add_channels(fch.PWMOutputChannel, 
-                                                 *pins, **kwargs)
-        self.writer()
-        self.__pins.update(new_channels)
-        self.__pwm_outputs.update(new_channels)
-        
-    @property
-    def reader(self):
-        return self.__reader
-    
-    @reader.setter
-    def reader(self, *args):
-        self.__print__("Can't change this manually. Auto-updating...")
-        if self.n_inputs > 1:
-            reader = sr.AnalogMultiChannelReader(self.__rtask.in_stream)
-        else:
-            reader = sr.AnalogSingleChannelReader(self.__rtask.in_stream)
-        try:
-            self.__rtask.streamer = reader
-            self.__reader = reader
-        except:
-            self.__reader = reader
-    
-    @property
-    def writer(self):
-        return self.__writer
-    
-    @writer.setter
-    def writer(self, *args):
-        self.__print__("Can't change this manually. Auto-updating...")
-        writer = sw.CounterWriter(self.__task.out_stream)
-        try:
-            self.__wtask.streamer = writer
-            self.__writer = writer
-        except:
-            self.__writer = writer
-    
-    def write(self, status, **kwargs):
-        self.__wtask.write(status, **kwargs)
-    
-    def read(self, nsamples_total=None, samplerate=None, 
-             callback=None, nsamples_each=20, **kwargs):
-        self.__rtask.read(nsamples_total=nsamples_total,
-                          samplerate=samplerate,
-                          callback=callback,
-                          nsamples_each=20,
-                          **kwargs)
-    
-    def __print__(self, message):
-        
-        if self.print:
-            print(message)
-
-#%%
-
-class OldTask:
-    
-    def __init__(self, device, streamer=True, 
-                 mode='r', print_messages=False):
-        
-        self.__device = device
-        self.__task = nid.Task()
-        self.__streamer = streamer
-        
-        self.__pins = DynamicDict()
-        
-        if 'r' in mode.lower():
-            self.write_mode = False
-        elif 'w' in mode.lower():
-            self.write_mode = True
-        
-        self.print = print_messages
-        
-    @property
-    def pins(self):
-        return self.__pins
-    
-    @pins.setter
-    def pins(self, value):
-        raise ValueError("You shouldn't modify this manually!")
-    
-    @property
-    def nchannels(self):
-        return self.__nchannels
-    
-    @nchannels.setter
-    def nchannels(self, value):
-        self.__print__("Can't modify this manually. Auto-updating...")
-        self.__nchannels = len(self.pins)
-    
-    def add_channels(self, ChannelClass, *pins, **kwargs):
-               
-        new_channels = {}
-        for p in pins:
-            if self.pins.is_empty(p):
-                channel = ChannelClass(
-                    self.__device,
-                    self.__task,
-                    self.__streamer,
-                    p,
-                    kwargs)
-                new_channels[p] = channel
-        
-        self.__pins.update({p : ChannelClass.__name__ for p in pins})
-        self.nchannels = True
-        return new_channels
-    
-    @property
-    def streamer(self):
-        return self.__streamer
-    
-    @streamer.setter
-    def streamer(self, streamer):
-        if streamer is True:
-            if not self.write_mode:
-                if self.nchannels > 1:
-                    reader = sr.AnalogMultiChannelReader(
-                            self.__task.in_stream)
-                else:
-                    reader = sr.AnalogSingleChannelReader(
-                            self.__task.in_stream)
-                self.__streamer = reader
-            else:
-                self.__streamer = sw.CounterWriter(
-                        self.__task.out_stream)
-        else:
-            self.__streamer = streamer
-        for p in self.pins.keys():
-            try:
-                self.pins[p].streamer = streamer
-            except:
-                pass
-    
-    def read(self, nsamples_total=None, samplerate=None,
-             nsamples_callback=None, callback=None,
-             nsamples_each=20):
-        
-        if self.write_mode:
-            raise TypeError("This task is meant to write!")
-        
-        if samplerate is None:
-            
-            samplerate = 400e3/self.nchannels
-        
-        if callback is not None:
-    
-            
-            self.__task.register_every_n_samples_acquired_into_buffer_event(
-                nsamples_callback, # call every nsamples_callback
-                callback)
-            nsamples_each = nsamples_callback
-            self.__print__("Each time, I take nsamples_callback")
-
-
-        if nsamples_total is None:
-        
-            self.__task.timing.cfg_samp_clk_timing(
-                    rate = samplerate,
-                    sample_mode = continuous
-                    )
-            
-            signal = np.array([])
-            self.__task.start()
-            print("Acquiring... Press Ctrl+C to stop.")
-            while True:
-                
-                try:
-                    each_signal = np.zeros((self.n_inputs,
-                                            nsamples_each))
-                    self.__streamer.read_many_sample(
-                        each_signal, 
-                        number_of_samples_per_channel=nsamples_each,
-                        timeout=2)
-                    signal = multiappend(signal, each_signal)
-                except KeyboardInterrupt:
-                    self.__task.stop()
-                    return signal
-
-        else:
-
-            signal = np.zeros((self.n_inputs, nsamples_total),
-                               dtype=np.float64)
-            self.__task.start()
-            self.__streamer.read_many_sample(
-                signal, 
-                number_of_samples_per_channel=nsamples_total,
-                timeout=2)
-            return signal
-    
-    
-    def write(self, status=True, frequency=None, duty_cycle=None):
-    
-        if not self.write_mode:
-            raise TypeError("This task is meant to read!")
-        elif self.nchannels>1:
-            raise IndexError("This method is only available for 1 PWM Output")
-        
-        # Look for pin
-        pin = list(self.pins.keys())[0]
-        
-        # Reconfigure if needed
-        if frequency is not None:
-            self.pins[pin].frequency = frequency
-        if duty_cycle is not None:
-            self.pins[pin].duty_cycle = duty_cycle
-        self.pins[pin].status = status
-    
-    def __print__(self, message):
-        
-        if self.print:
-            print(message)
-
-#%%
-
-"""Here starts a really old version made of functions"""
-
-#%%
-
-def analog_inputs(
-        task,
-        physical_channels,
-        voltage_range=[-10, 10],
-        configuration=nid.constants.TerminalConfiguration.NRSE
-        ):
-    
-    """Initializes analog input channel/s.
-    
-    Parameters
-    ----------
-    task : nid.Task()
-        Task where to initialize analog input channel/s to.
-    physical_channels : str, list
-        Pyhsical channel/s to be initialized as analog input channel/s.
-    voltage_range=[-10,10] : list
-        Range of the analog input channel/s. Each of them should be a 
-        list or tuple that contains minimum and maximum in V.
-    configuration=NRSE : nid.constants.TerminalConfiguration, optional
-        Analog input channel/s terminal configuration.
-    
-    Returns
-    -------
-    ai_channels : list, nid.task.ai_channels.add_ai_voltage_chan
-        Analog input channel/s object/s.
-    """    
-
-    if not isinstance(physical_channels, tuple):
-        physical_channels = [physical_channels]
-
-    if not isinstance(voltage_range, list):
-        voltage_range = [voltage_range for ch in physical_channels]
-        
-    if not isinstance(configuration, list):
-        configuration = [configuration 
-                         for ch in physical_channels]
-    
-    ai_channels = []
-    for i, ch in enumerate(physical_channels):
-        ai_channels.append(
-            task.ai_channels.add_ai_voltage_chan(
-                physical_channel = ch,
-                min_val = voltage_range[i][0],
-                max_val = voltage_range[i][1],
-                units = nid.constants.VoltageUnits.VOLTS
-                )
-            )
-        ai_channels[i].ai_term_cfg = configuration[i]
-    
-    if len(ai_channels) > 1:
-        return ai_channels
-    else:
-        return ai_channels[0]
-    
-
-#%%
-
-def pwm_outputs(
-        task,
-        physical_channels,
-        duty_cycle=.5,
-        frequency=10e3
-        ):
-
-    """Initializes digital PWM output channel/s.
-    
-    Parameters
-    ----------
-    task : nid.Task()
-        Task where to initialize analog input channel/s to.
-    physical_channels : str, list
-        Pyhsical channel/s to be initialized as analog input channel/s.
-    duty_cycle=.5 : int, float {0<=duty_cycle<=1}
-        Duty cycle to be set on digital PWM output channel/s at start.
-    frequency=10e3 : int, float
-        Frequency in Hz to be set on digital PWM output channel/s.
-    
-    Returns
-    -------
-    pwm_channels : list, nid.task.ai_channels.add_ai_voltage_chan
-        Digital PWM output channel/s object/s.
-    """    
-    
-    if not isinstance(physical_channels, list):
-        physical_channels = [physical_channels]
-    
-    if not isinstance(frequency, list):
-        frequency = list(frequency for ch in physical_channels)
-    
-    if not isinstance(duty_cycle, list):
-        duty_cycle = list(duty_cycle for ch in physical_channels)
-    
-    pwm_channels = []
-    for i in range(len(physical_channels)):
-        pwm_channels.append(
-            task.co_channels.add_co_pulse_chan_freq(
-                    counter = physical_channels[i],
-                    freq = frequency[i],
-                    duty_cycle = duty_cycle[i],
-                    units = nid.constants.FrequencyUnits.HZ
-                    )
-                )
-    
-    task.timing.cfg_implicit_timing(
-            sample_mode = nid.constants.AcquisitionType.CONTINUOUS
-            )
-    
-    if len(pwm_channels) > 1:
-        return pwm_channels
-    else:
-        return pwm_channels[0]
