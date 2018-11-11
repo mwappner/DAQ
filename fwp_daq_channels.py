@@ -346,7 +346,7 @@ class PWMOutputChannel:
             if self.conection:
                 if key:
                     self.__task.start()
-                    self.__stream.write_one_sample_pulse_frequency(
+                    self.__streamer.write_one_sample_pulse_frequency(
                             frequency = self.frequency,
                             duty_cycle = self.duty_cycle,
                             )

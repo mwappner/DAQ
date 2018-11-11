@@ -2,350 +2,231 @@
 """
 This script is to make measurements with a National Instruments DAQ.
 
+This script is based on our old script 'SOldLoop'. It works using the 
+'fwp_daq' module we designed. This script's goal goal is to make a 
+control loop that can raise an object at a constant given velocity.
+
 @author: GrupoFWP
 """
 
+import fwp_analysis as fan
 import fwp_daq as daq
 import fwp_daq_channels as fch
-import numpy as np
-
-#%%
-
-import fwp_save as sav
-import fwp_analysis as fan
+import matplotlib.pyplot as plt
 import nidaqmx as nid
-from nidaqmx import stream_readers as sr
-from nidaqmx import stream_writers as sw
-from nidaqmx.utils import flatten_channel_string
+import numpy as np
+import os
 from time import sleep
-import fwp_wavemaker as wm
+conf = nid.constants.TerminalConfiguration
 
+#%% PWM_Single
 
+"""Setes a PWM output with constant duty cycle and therefore mean value"""
 
-#%% Just turn on a PWM signal
+# PARAMETERS
 
-pwm_channels = 'Dev1/ctr0' # Clock output
-pwm_frequency = 100
-pwm_duty_cycle = .5
-
-with nid.Task() as task_co:
-    
-    # Configure clock output
-    channels_co = daq.pwm_outputs(
-            task_co,
-            physical_channels = pwm_channels,
-            frequency = pwm_frequency,
-            duty_cycle = pwm_duty_cycle
-            )
-    
-    # Set contiuous PWM signal
-    task_co.timing.cfg_implicit_timing(
-            sample_mode = nid.constants.AcquisitionType.CONTINUOUS)
-    
-    # Create a PWM stream
-    stream_co = sw.CounterWriter(task_co.out_stream)
-
-    # Play    
-    task_co.start()
-    sleep(10)
-
-#%% Change PWM mean value
-
-pwm_channels = 'Dev1/ctr0' # Clock output
-pwm_frequency = 100
+device = daq.devices()[0] # Assuming you have only 1 connected NI device.
+pwm_pin = 38 # Literally the number of the DAQ pin
+pwm_frequency = 100e3
 pwm_duty_cycle = np.linspace(.1,1,10)
-
-with nid.Task() as task_co:
-    
-    # Configure clock output
-    channels_co = daq.pwm_outputs(
-            task_co,
-            physical_channels = pwm_channels,
-            frequency = pwm_frequency,
-            duty_cycle = pwm_duty_cycle[0]
-            )
-    
-    # Set contiuous PWM signal
-    task_co.timing.cfg_implicit_timing(
-            sample_mode = nid.constants.AcquisitionType.CONTINUOUS)
-    
-    # Create a PWM stream
-    stream_co = sw.CounterWriter(task_co.out_stream)
-
-    # Play    
-    task_co.start()
-    
-    for dc in pwm_duty_cycle:
-        sleep(3)
-        channels_co.co_pulse_duty_cyc = dc
-        stream_co.write_one_sample_pulse_frequency(
-                frequency = channels_co.co_pulse_freq,
-                duty_cycle = channels_co.co_pulse_duty_cyc
-                )
-        print("Hope I changed duty cycle to {:.2f} x'D".format(dc))
-        sleep(3)
-    task_co.stop()
-
-#%% Moni's Voltage Control Loop --> streamers (pag 57)
-
-name = 'V_Control_Loop'
-
-# DAQ Configuration
-samplerate = 400e3
-mode = nid.constants.TerminalConfiguration.NRSE
-number_of_channels=2
-channels_to_read = ["Dev1/ai0", "Dev1/ai2"]
-channels_to_write = ["Dev1/ao0", "Dev1/ao1"]
-
-# Signal's Configuration
-signal_frequency = 10
-signal_pk_amplitude = 2
-periods_to_measure = 50
-
-# PID's Configuration
-pidvalue=1
-pidconstant=0.1
 
 # ACTIVE CODE
 
-# Other configuration
-duration = periods_to_measure/signal_frequency
-samples_to_measure = int(samplerate * duration/1000)
-filename = sav.savefile_helper(dirname = name, 
-                               filename_template = 'NChannels_{}.txt')
-header = 'Time [s]\tData [V]'
+# Initialize communication
+task = daq.Task(device, mode='w')
 
-# First I make a ramp
-waveform= wm.Wave('triangular', frequency=10, amplitude=1)
-output_array = waveform.evaluate_sr(sr=samplerate, duration=duration)
+# Configure output
+task.add_channels(fch.PWMOutputChannel, pwm_pin)
+task.all.frequency = pwm_frequency
+task.all.duty_cycle = pwm_duty_cycle[0]
+"""Could do all this together:
+task.add_channels(fch.PWMOutputChannel, pwm_pin,
+                  frequency = pwm_frequency,
+                  duty_cycle = pwm_duty_cycle)
+"""    
 
-# Now I define a callback function
-def callback(task_handle, every_n_samples_event_type,
-             number_of_samples, callback_data):
-    
-    print('Every N Samples callback invoked.')
+# Turn on and off the output
+task.all.status = True # turn on
+sleep(10)
+task.all.status = False # turn off
 
-    samples = reader.read_many_sample(
-            values_read, 
-            number_of_samples_per_channel=number_of_samples,
-            timeout=2)
-    
-    global output_array
-    non_local_var['samples'].extend(samples)
-    
-    if max(samples) > (pidvalue+0.1):
-        delta = max(samples) - pidvalue
-        output_array -= pidconstant * delta
-        
-    elif max(samples) < (pidvalue-0.1):
-         delta = pidvalue - max(samples)
-         output_array += pidconstant * delta
-         
-    return 0
+# End communication
+task.close()
 
-# Now I start the actual PID loop        
-with nid.Task() as write_task, nid.Task() as read_task:
+#%% PWM_Sweep
 
-    # First I configure the reading
-    read_task.ai_channels.add_ai_voltage_chan(
-        flatten_channel_string(channels_to_read),
-        max_val=10, min_val=-10)
-    reader = sr.AnalogMultiChannelReader(read_task.in_stream)
-    
-    # Now I configure the writing
-    write_task.ao_channels.add_ao_voltage_chan(
-            flatten_channel_string(channels_to_write),
-            max_val=10, min_val=-10)
-    writer = sw.AnalogMultiChannelWriter(write_task.out_stream)
+"""Makes a sweep on a PWM output's duty cycle and therefore mean value"""
 
-    # source task.
-    # Start the read and write tasks before starting the sample clock
-    # source task.
+# PARAMETERS
 
-    read_task.start()
-    read_task.register_every_n_samples_acquired_into_buffer_event(
-            20, # Every 20 samples, call callback function
-            callback) 
-    
-    write_task.start()
-    writer.write_many_sample(output_array)
-
-    values_read = np.zeros((number_of_channels, samples_to_measure),
-                           dtype=np.float64)
-    reader.read_many_sample(
-        values_read, number_of_samples_per_channel=samples_to_measure,
-        timeout=2)
-        
-    non_local_var = {'samples': []}     
-    
-#    np.testing.assert_allclose(values_read, rtol=0.05, atol=0.005)
-
-## Save measurement
-#
-#nchannels = nchannels + 1
-#print("For {} channels, signal has size {}".format(
-#        nchannels,
-#        np.size(signal)))
-#time = np.linspace(0, duration, samples_to_measure)
-#try:
-#    data = np.zeros((values_read[0,:], values_read[:,0]+1))
-#    data[:,0] = time
-#    data[:,1:] = values_read[0,:]
-#    data[:,2:] = values_read[1,:]
-#    data[:,3:] = values_read[2,:]
-#except IndexError:
-#    data = np.array([time, signal]).T
-#np.savetxt(filename(nchannels), data, header=header)
-
-#%% With new module!!! Change PWM mean value
-
-#pwm_pin = 1 # Clock output
-#pwm_frequency = 100e3
-#pwm_duty_cycle = np.linspace(.1,1,10)
-#
-#device = daq.devices()[0]
-#
-#with daq.OldTask(device, mode='w') as task:
-#    
-#    # Configure clock output
-#    task.add_channels(fch.PWMOutputChannel, pwm_pin)
-#    task.pins[pwm_pin].frequency = pwm_frequency
-#    task.pins[pwm_pin].duty_cycle = pwm_duty_cycle[0]
-#    """Could do all this together:
-#    task.add_channels(fch.PWMOutputChannel, pwm_pin,
-#                      frequency = pwm_frequency,
-#                      duty_cycle = pwm_duty_cycle)
-#    """    
-#    
-#    task.pins(pwm_pin).status = True
-#    for dc in pwm_duty_cycle:
-#        task.pins[pwm_pin].duty_cycle = dc
-#        print("Hope I changed duty cycle to {:.2f} x'D".format(dc))
-#        sleep(3)
-#    task.pins(pwm_pin).status = False
-
-#%% With newer module!
-
-"""Makes loop changing PWM output's duty cycle and therefore mean value"""
-
-pwm_pin = 1 # Literally the number of the DAQ pin
+device = daq.devices()[0] # Assuming you have only 1 connected NI device.
+pwm_pin = 38 # Literally the number of the DAQ pin
 pwm_frequency = 100e3
 pwm_duty_cycle = np.linspace(.1,1,10)
 
-device = daq.devices()[0]
+# ACTIVE CODE
 
-with daq.Task(device, mode='w') as task:
-    
-    # Configure clock output
-    task.add_channels(fch.PWMOutputChannel, pwm_pin)
-    task.all.frequency = pwm_frequency
-    task.all.duty_cycle = pwm_duty_cycle[0]
-    """Could do all this together:
-    task.add_channels(fch.PWMOutputChannel, pwm_pin,
-                      frequency = pwm_frequency,
-                      duty_cycle = pwm_duty_cycle)
-    """    
-    
-    task.all.status = True
-    for dc in pwm_duty_cycle:
-        task.all.duty_cycle = dc
-        """ Could also call by channel:
-        task.ctr0.duty_cycle = dc
-        """
-        sleep(3)
-    task.all.status = False
-    task.close()
+# Initialize communication
+task = daq.Task(device, mode='w')
 
-#%% Whith newer module too!
+# Configure output
+task.add_channels(fch.PWMOutputChannel, pwm_pin)
+task.all.frequency = pwm_frequency
+task.all.duty_cycle = pwm_duty_cycle[0]
 
-"""Makes a single measurement on analog input/s."""
+# Make a sweep on output's duty cycle
+task.all.status = True # turn on
+for dc in pwm_duty_cycle:
+    task.all.duty_cycle = dc # change duty cycle
+    """ Could also call by channel:
+    task.ctr0.duty_cycle = dc
+    """
+    sleep(2)
+task.all.status = False # turn off
 
-ai_pins = [15]#, 16]#17]
-ai_conf = 'Ref'
+# End communication
+task.close()
 
-device = daq.devices()[0]
+#%% Read_Single
 
+"""Makes a single measurement on an analog input."""
+
+# PARAMETERS
+
+device = daq.devices()[0] # Assuming you have only 1 connected NI device.
+ai_pins = [15] # Literally the number of the DAQ pin
+ai_conf = 'Ref' # Referenced mode (measure against GND)
 nsamples = int(200e3)
 
-task = daq.Task(device, mode='r')
+# ACTIVE CODE
 
-#with daq.Task(device, mode='r') as task:
+# Initialize communication
+task = daq.Task(device, mode='r')
         
-# Configure clock output
+# Configure input
 task.add_channels(fch.AnalogInputChannel, *ai_pins)
 
-signal = task.read(nsamples_total=10000, # 2 ch => 29500 sí, 30000 no
+# Make a measurement
+signal = task.read(nsamples_total=10000, 
                    samplerate=None) # None means maximum SR
+"""Beware!
+An daqError will be raised if not all the DAQ's acquired samples can be 
+passed to the PC on time.
+2 channels => nsamples_total = 29500 can be done but not 30000.
+"""
 
-#task.close()
-                   
-#%% Whith newer module too!
+# End communication
+task.close()
 
-"""Makes a continuous measurement on analog input/s."""
+# Make a plot
+plt.figure()
+plt.plot(signal)
 
-ai_pins = [15, 17]
-ai_conf = 'Dif' # measures in differential mode
+#%% Read_Continuous
+
+"""Makes a continuous measurement on an analog input."""
+
+# PARAMETERS
+
+device = daq.devices()[0] # Assuming you have only 1 connected NI device.
+ai_pins = [15] # Literally the number of the DAQ pin
+ai_conf = 'Ref' # Referenced mode (measure against GND)
+nsamples = int(200e3)
+
+# ACTIVE CODE
+
+# Initialize communication in order to read
+task = daq.Task(device, mode='r')
+        
+# Configure input
+task.add_channels(fch.AnalogInputChannel, *ai_pins)
+
+# Make a continuous measurement
+signal = task.read(nsamples_total=None, # None means continuous
+                   samplerate=50e3, # None means maximum SR
+                   nsamples_each=500,
+                   )
+
+# End communication
+task.close()
+
+# Make a plot
+plt.figure()
+plt.plot(signal)
+
+#%% Control_Loop
+
+# PARAMETERS
 
 device = daq.devices()[0]
 
-with daq.Task(device, mode='r') as task:
-    
-    # Configure clock output
-    task.add_channels(fch.AnalogInputChannel, *ai_pins)
-    task.all.configuration = ai_conf
-    
-    signal = task.read(nsamples_total=None, # None means continuous
-                       samplerate=None) # None means maximum SR
-    
-    task.close()
+ai_pin = 15 # Literally the number of the DAQ pin
+ai_conf = 'Ref' # Referenced mode (measure against GND)
 
-#%% Prototype of control loop with new module!
-
-ai_pin = 15 # default mode is non referenced
-
-pwm_pin = 1 # literally the number of the DAQ pin
+pwm_pin = 38 # Literally the number of the DAQ pin
 pwm_frequency = 100e3
 pwm_default_duty_cycle = np.linspace(.1,1,10)
-wheel_radius = 0.025 #in meters
 
-device = daq.devices()[0]
+wheel_radius = 0.025 # in meters
 
 nsamples_callback = 20
 samplingrate = 100e3
+nsamples_each = 1000
 
-pid = fan.PIDController(setpoint=1, kp=10, ki=5, kd=7, dt=1/samplingrate)
+pid = fan.PIDController(setpoint=1, kp=10, ki=5, kd=7, 
+                        dt=1/samplingrate)
 
-with daq.DAQ(device) as task, open('log.txt', 'w') as file:
+# ACTIVE CODE
 
-    file.write('Vel\t duty_cycle\t P\t I\t D')
+# Initialize communication for writing and reading at the same time
+task = daq.DAQ(device)
+
+# Configure inputs
+task.add_analog_inputs(ai_pin)
+#task.inputs.configuration = ai_conf
+task.inputs.ai0._AnalogInputChannel__channel.ai_term_cfg = conf.NRSE
+
+# Configure outputs
+task.add_pwm_outputs(pwm_pin)
+task.outputs.frequency = pwm_frequency
+task.outputs.duty_cycle = pwm_default_duty_cycle
+
+# Control loop's saving mechanism
+with open(os.path.join('Measurements','log.txt'), 'w') as file:
+    file.write('Vel\t duty_cycle\t P\t I\t D') # First line
+    
+    # Control loop's callback
     def callback(task_handle, every_n_samples_event_type,
                  number_of_samples, callback_data):
             
-        samples = task.read(nsamples_total=200,
-                            samplerate=samplingrate) # None means maximum
-        vel = fan.peak_separation(samples, pid.dt, prominence=.5) * wheel_radius
+        # First I read a few values
+        samples = task.read(nsamples_total=nsamples_callback,
+                            samplerate=samplingrate)
+        
+        # Now I apply PID
+        d = np.diff(samples)
+        vel = fan.peak_separation(d, pid.dt, prominence=1, height=2)
+        vel = vel * wheel_radius
         new_dc = pid.calculate(vel)
         
-        data = fan.append_data_to_string(vel, new_dc, pid.p_term, pid.i_term, pid.d_term)
+        # Then I save some data
+        data = fan.append_data_to_string(vel, new_dc, 
+                                         pid.p_term, pid.i_term, 
+                                         pid.d_term)
         file.write(data)
         
-        task.ouputs.duty_cycle = fan.set_bewtween(new_dc, *(0,100))    
-    
-    # Add channels
-    task.add_analog_inputs(ai_pin)
-    task.add_pwm_outputs(pwm_pin)
-    
-    # Configure all outputs    
-    task.outputs.frequency = pwm_frequency
-    task.outputs.duty_cycle = pwm_default_duty_cycle
+        # And finally I change duty cycle
+        task.ouputs.duty_cycle = fan.set_bewtween(new_dc, *(0,100))
     
     # Turn on outputs
     task.outputs.status = True
     
     # Start measurement
     signal = task.inputs.read(nsamples_total=None,
+                              nsamples_each=500,
+                              samplerate=samplingrate,
                               nsamples_callback=nsamples_callback,
                               callback=callback)
     
-    task.output.status = False
+    task.outputs.status = False
     task.close()
