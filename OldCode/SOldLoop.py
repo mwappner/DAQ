@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-This script was used to start designing a NI DAQ control loop.
+This script was used to start a NI 6212 DAQ control loop.
+
+This script uses 'fwp_old_daq' module, which is based on another group's
+code. The goal was to write a control loop to raise an object a constant 
+given velocity.
 
 @author: Usuario
 """
