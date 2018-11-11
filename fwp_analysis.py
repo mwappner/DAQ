@@ -762,4 +762,4 @@ def append_data_to_string(*args):
     out = ''
     for value in args:
         out += '\t' + str(value)
-    return out
+    return out + '\n'
