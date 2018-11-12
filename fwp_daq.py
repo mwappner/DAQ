@@ -400,7 +400,7 @@ class Task:
 
         # Is there a real DAQ connected or are we just testing?
         self.test_mode = test_mode
-        if not test_mode:
+        if test_mode:
             self.print = True
         else:
             self.print = print_messages
@@ -411,7 +411,7 @@ class Task:
         self.__nchannels = 0
         
         # DAQ's reading or writing manager and configuration
-        self.streamer = True
+        self.streamer = None
         self.samplerate = 400e3
         self.buffersize = None
     
@@ -485,7 +485,7 @@ class Task:
         
         # Reconfigure
         self.__nchannels = self.nchannels + len(new_channels)
-        self.streamer = True
+        self.streamer = None
         self.samplerate = None
         self.buffersize = None
     
@@ -541,16 +541,19 @@ class Task:
                 
             # Reconfigure if needed
             if not condition:
-                if value>400e3:
+                if value is None: # Default value is maximum value
+                    value = int(400e3/self.nchannels)
+                if value > 400e3:
                     raise ValueError("Must be <= 400 kHz")
                 if value * self.nchannels > 400e3:
                     msg = "Must be <= {:.0f} Hz".format(
                             400e3/self.nchannels)
                     raise ValueError(msg)
-                if value is None: # Default value is maximum value
-                    value = int(400e3/self.nchannels)
-                self.__task.timing.cfg_samp_clk_timing(
+                if not self.test_mode:
+                    self.__task.timing.cfg_samp_clk_timing(
                             rate = value)
+                else:
+                    self.__print__("Should 'task.timing.cgf_samp...'")
                 self.__samplerate = value
 
     @property
@@ -583,10 +586,13 @@ class Task:
             
             # Reconfigure if needed
             if not condition:
-                if value is None: # Default value is DAQ's one.
-                    value = self.streamer._in_stream.input_buf_size
+                if not self.test_mode:
+                    if value is None: # Default value is DAQ's one.
+                        value = self.streamer._in_stream.input_buf_size
+                    else:
+                        self.streamer._in_stream.input_buf_size = value
                 else:
-                    self.streamer._in_stream.input_buf_size = value
+                    self.__print__("Should 'streamer._in_stream.in...'")
                 self.__buffersize = value
     
     def read(self, nsamples_total=None, samplerate=None,

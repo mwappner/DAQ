@@ -160,10 +160,13 @@ class AnalogInputChannel:
         
         # Reconfigure if needed
         if not condition:
-            if self.__range[0] != voltage_range[0]:
-                self.input_min = voltage_range[0]
-            if self.__range[1] != voltage_range[1]:
-                self.input_max = voltage_range[1]
+            try:
+                if self.__range[0] != voltage_range[0]:
+                    self.input_min = voltage_range[0]
+                if self.__range[1] != voltage_range[1]:
+                    self.input_max = voltage_range[1]
+            except AttributeError:
+                self.__range = voltage_range
             self.__range = voltage_range
     
     @property
@@ -368,7 +371,7 @@ class PWMOutputChannel:
 
         # Is there a real DAQ connected or are we just testing?
         self.test_mode = test_mode
-        if not test_mode:
+        if test_mode:
             self.print = True
         else:
             self.print = print_messages
@@ -391,9 +394,9 @@ class PWMOutputChannel:
             print("Should 'add_co_pulse_chan...'+'timing.cfg_impli...'")
         
         # Configure this channel
+        self.__status = False
         self.frequency = frequency
         self.duty_cycle = duty_cycle
-        self.__status = False
 
     @property
     def low_pin(self):
