@@ -1,0 +1,46 @@
+-----------------------------------------
+En fwp_classes:
+
+1. NoNoneList.append: agregar TypeError cuando se quiere instroducir un None (no ahcerlo silenciosamente).
+Alternativamente: agregar un atributo extra showexceptions que defaultee a True?
+
+2. DynamicDict.is_empty: ante key=None, usar la forma incorporada de testear si diccionarios contienen cosas o no, que es bool(dict). Propongo reemplazar 'return len(list(self.keys())) == 0' por 'return bool(self)'. No Sé si anda dentro de la definición de la clase, afuera sí.
+
+3. ObjectDict.__setatrr__: agregar un check para no reemplazar atributos y/o métodos default de dict. Probablemente, levantar ValueError cuando se encuentra uno así.
+
+4. en general y totalmente superfluo: yo lo llamaría isempty, no is_empty. Es lo usual (creo).
+
+-----------------------------------------
+En fwp_daq:
+
+1. DAQ, en la documentación: agregar de dónde provienen las cosas? fwp_classes.Wrapperdict (vi que en Task está)
+
+2. Task.write_mode: llamarlo is_write_mode tal vez? Suena a que es el modo de escritura, no un querry de si está en modo de escritura o modo lectura. Además, agregaría un is_read_mode por simetría para la intefaz de usuario. internamente, usar sólo uno (o no, también se puede usar el correcto).
+
+3. Task.__init__: al definir self.__write_mode, no ahce falta el if, else: 'self.__write_mode = 'w' in mode.lower()'. Nunca hace falta poner 'if condition(): True; else: False'. Junto con lo anterior, propongo: 'self.__is_write_mode = 'w' in mode.lower(); self.__is_read_mode = not self.__is_write_mode ='.
+
+4. Task.__init__: si self.pins es un WrapperDict que contiene los pins por número y self.all uno que contien los canales por nombre, por qué no llamarlo self.channels?
+
+5. Task.add_channels: al principio, en if len(pins) == 0, no conviene usar eso para probar si una secuencia de algún tipo está vacía o no. Supuestamente, lo pythónico es hacer 'if not pins: ...' (https://stackoverflow.com/questions/53513/how-do-i-check-if-a-list-is-empty)
+
+6. self.__dict__.update(new_channels) # attributes by channel name <3 (no es una corrección, es una expresión de amor)
+
+7. Task.streamer.setter: no usar 'if algo==None', sino 'if algo is (not) None', pero es una nimiedad. De hecho, de la fuente citada: "So, back to the original question: does it really matter? Practically, probably not." (https://stackoverflow.com/questions/3257919/what-is-the-difference-between-is-none-and-none)
+
+8. Task.read: para samplerate: el comportamiento que más sentido tiene para mí es que None use self.samplerate. Además, si el usuario usa otro samplerate, uno no esperaría que eso cambie el samplerate de la clase de forma silenciosa sólo por haber llamado read(). Como no se puede no modificar el sampling rate del nid.Task, las opciones son: no permitir al usuario introducir el sampling rate en read(), o volver el sampling rate del nid.Task a self.samplingrate después de terminar la medición. Para todo esto, al principio habría un 'if samplingrate is None: samplingrate = self.samplingrate' y durante toda la función se usa samplingrate, en vez de self.samplingrate.
+
+9. Task.read: para acelerar significativamente el proceso en modo continuo, sacar la definición de each_signal de adentro del while. Se peude sobreescribir en cada iteración, no hace falta pasar ceros. Además, pondría algo como "number of buffers read: ...", para que sea más claro para alguien que no leyó el código.
+
+10. Task.read: el callback no funciona de esta forma, porque en general queremos medir dentro del callback. Como esto lo que ahce es poner a medir directamente y la daq llama al callback cada tanto, no te deja medir adentro del callback, porque ya está midiendo. Habría que reecribirlo para que funque con callback, charlémoslo. Siguiendo el ejemplo de Moni, cuando hay callback, sólo hay que ahcer task.start() y no poner task.read() explícitamente.
+
+11. Task.read: por desconocimiento: no ahce falta un task.wait_until_done() en el código de read? Tal vez con los streamer no haga falta...
+
+12. Task.write: llamarlo PWD_write o algo así? Es una nimiedad, siendo que no creo que usemos otros writes, pero me aprece comado.
+
+13. Unificar el módulo con fwp_daq_channels?
+
+-----------------------------------------
+En fwp_daq_channels:
+
+1. AnalogChannel.input_range.setter: para este tipo de cosas se suele usar tuplas más que listas, porque las tuplas son inmutables. Nada impide al usuario hacer Channel.range[0] = 'algo que no es un numero', o Channel.range.append('otro elemento'). Eso se evita usando tuplas. Es un tema hacerlo recontra foolproof. No hay necesidad de hacer el check para ver si cambiar o no las cosas, porque lo hacés directamente en input_min e input_max. Yo pondría simplemente un check para ver que sea un iterable de longitud 2, y si lo es, guardás el iterable como tupla en el atributo. Nota: siendo que tenés input_max e input_min y que la daq los usa por separado, no como 2-tupla (dupla?) en este caso, no tengo una opinión muy fuerte al respecto.
+
