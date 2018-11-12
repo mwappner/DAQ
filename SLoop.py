@@ -349,7 +349,7 @@ def callback_definer(file):
         file.write(data)
         
         # And finally I change duty cycle
-        task.ouputs.duty_cycle = fan.set_bewtween(new_dc, *(0,100))
+        task.ouputs.duty_cycle = fan.clip_bewtween(new_dc, *(0,100))
     
         return 0
     
@@ -433,7 +433,7 @@ def callback(task_handle, every_n_samples_event_type,
 #                pid.d_term])
     
     # And finally I change duty cycle
-    task.ouputs.duty_cycle = fan.set_bewtween(new_dc, *(0,100))
+    task.ouputs.duty_cycle = fan.clip_bewtween(new_dc, *(0,100))
 
     return 0
   
