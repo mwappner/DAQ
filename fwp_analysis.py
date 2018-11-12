@@ -22,6 +22,7 @@ from math import sqrt
 import numpy as np
 from scipy.optimize import curve_fit
 from scipy.signal import find_peaks
+from collections import namedtuple
 
 #%%
 
@@ -706,7 +707,9 @@ def peak_separation(signal, time=1, *args, **kwargs):
     return np.mean(peak_times)
 
 #%% PID class
-    
+
+
+
 class PIDController:
     '''A simple class implementing a PID contoller.
     
@@ -766,6 +769,16 @@ class PIDController:
 
         return new_value
 
+stuff_to_log = ('feedback_value',
+                'new_value',
+                'last_error',
+                'p_term',
+                'i_term',
+                'd_term')
+
+# Create a named tuple with default value for all fields an empty list
+PIDlog = namedtuple('PIDLog', stuff_to_log, defaults=[[]]*len(stuff_to_log))
+
 class PIDControllerWithLog:
     """A simple class implementing a PID contoller that keeps a log.
     
@@ -792,8 +805,7 @@ class PIDControllerWithLog:
             actuator = pid.calculate(signal)
             write(actuator)
     """
-
-    def __init__(self, setpoint, kp=1.0, ki=0.0, kd=0.0, dt=1):
+    def __init__(self, setpoint, kp=1.0, ki=0.0, kd=0.0, dt=1, log_data=False):
 
         self.setpoint = setpoint
         self.kp = kp
@@ -806,8 +818,13 @@ class PIDControllerWithLog:
         self.i_term = 0
         self.d_term = 0
         
-        self.log = []
-        # Holds feedback_value, new_value, p_term, i_term, d_term
+        # start with a fresh log
+        self.log_data = log_data
+        self.clearlog()
+        
+    def __repr__(self):
+        string = 'PID with parameters: kp={}, ki={}, kd={}'
+        return string.format(self.kp, self.ki, self.kd)
 
     def calculate(self, feedback_value):
         
@@ -824,18 +841,41 @@ class PIDControllerWithLog:
         new_value = self.kp * self.p_term
         new_value += self.ki * self.i_term
         new_value += self.kd * self.d_term
-
-        self.append([feedback_value,
-                     new_value,
-                     self.p_term,
-                     self.i_term,
-                     self.d_term])
+        
+        if self.log_data:
+            self.last_log = PIDlog._make([feedback_value, new_value, self.last_error,
+                                          self.p_term, self.i_term, self.d_term])
+            self.__log.append(self.last_log)
 
         return new_value
 
+    def clearlog(self):
+        self.__log = []
+        self.last_log = PIDlog()
+
+    @property
+    def log(self):
+        #read-only
+        if self.__log:
+            return self.__makelog__()
+        else:
+            raise ValueError('No logged data.')
+            
+    def __makelog__(self):
+        '''Make a PIDlog nuamedtuple containing the list of each
+        value in each field.'''
+        log = []
+        for i in range(len(self.last_log)):
+            log.append([prop[i] for prop in self.__log])
+        return PIDlog._make(log)
+#%%
+pid = PIDControllerWithLog(10, log_data=True)
+for k in range(30): pid.calculate(k)
+print(pid.log)
+
 #%%
         
-def set_bewtween(value, lower=0, upper=100):
+def clip_bewtween(value, lower=0, upper=100):
     
     value = max(lower, value)
     value = min(upper, value)
