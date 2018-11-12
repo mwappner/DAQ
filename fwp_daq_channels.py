@@ -2,7 +2,7 @@
 """
 The 'fwp_daq_channels' module contains base classes for 'fwp_daq'.
 
-@author: Usuario
+@author: Vall
 """
 
 import fwp_string as fst
@@ -15,50 +15,91 @@ continuous = nid.constants.AcquisitionType.CONTINUOUS
 
 class AnalogInputChannel:
 
+    """Manages an analog input channel for a NI USB 6212 DAQ.
+    
+    Parameters
+    ----------
+    device : str
+        NI device's name where analog input channel/s should be put.
+    task : nidaqmx.Task()
+        NIDAQMX's task where this channels should be added.
+    streamer : nidaqmx.stream_readers class
+        NIDAMX's stream reader for this type of channel.
+    pin : int
+        Device's pin to initialize as analog input channel/s.
+
+    Other Parameters
+    ----------------
+    voltage_range=[-10,10] : list, tuple, optional
+        Range of the analog input channel. Should be a list or tuple 
+        of length 2 that contains minimum and maximum in V.
+    configuration='NonReferenced' : optional
+        Analog input channel terminal configuration.
+    print_messages=False : bool, optional
+        Whether to print messages or not.
+    test_mode=False : bool, optional
+        Allows to test classes even if you don't have a real 
+        conection with a NI USB 6212.
+    
+    Attributes
+    ----------
+    pin : int
+        Number of DAQ pin.
+    channel : str
+        Name of DAQ channel.
+    streamer : nidaqmx.stream_readers
+        DAQ's reading manager.
+    configuration : nidaqmx.constants.TerminalConfiguration
+        Analog channel's terminal configuration. Could be: referenced 
+        (measures against GND), non-referenced (measures against SENSE),
+        differential (measureas against another analog input pin).
+    range : list
+        Analog channel's input range in V. Must be a list with 2 
+        elements (first one is minimum voltage ande second one, maximum).
+    input_min : int, float
+        Analog channel's input minimum voltage in V.
+    input_max : int, float
+        Analog channel's input maximum voltage in V.
+    gnd_pin : int
+        Number of DAQ pin that holds the other terminal of this channel. 
+        Could be an analog pin (differential mode), SENSE pin 
+        (non-referenced mode) or GND pin (referenced mode)
+    
+    Other Attributes
+    ----------------
+    write_mode : bool
+        Whether this is a writing class or a reading one.
+    test_mode : bool
+        Whether it's test mode (no real connection) or not.
+    print : bool
+        Whether to print inner messages or not.
+        
+    """   
+    
     def __init__(self, device, task, streamer, pin,
                  voltage_range=[-10, 10], 
                  configuration='NonReferenced',
                  print_messages=False,
-                 conection=True):
-
-        """Initializes analog input channel.
+                 test_mode=False):       
         
-        Parameters
-        ----------
-        device : str
-            NI device's name where analog input channel/s should be put.
-        task : nidaqmx.Task()
-            NIDAQMX's task where this channels should be added.
-        streamer : nidaqmx.stream_readers class
-            NIDAMX's stream reader for this type of channel.
-        pin : int
-            Device's pin to initialize as analog input channel/s.
-        voltage_range=[-10,10] : list, tuple, optional
-            Range of the analog input channel. Should be a list or tuple 
-            of length 2 that contains minimum and maximum in V.
-        configuration='NRSE' : {'NR', 'R', 'DIFF', 'PSEUDODIFF'}, optional
-            Analog input channel terminal configuration.
-        print_messages=False : bool, optional
-            Whether to print messages or not.
-        conection=True : bool, optional
-            Whether you have a real conection with a NI USB 6212 or not. 
-            Allows to test classes.
-        """          
-        
+        # First, set general DAQ attributes
         self.__device = device
         self.__task = task
-        self.__streamer = streamer
+        self.streamer = streamer
 
-        self.conection = conection
-        if not conection:
+        # Is there a real DAQ connected or are we just testing?
+        self.test_mode = test_mode
+        if test_mode:
             self.print = True
         else:
             self.print = print_messages
-        
+
+        # Some general attributes of this channel        
         self.pin = pin
         self.channel = self.__channel__(pin)
 
-        if conection:
+        # Add this channel to the DAQ
+        if not self.test_mode:
             ai_channel = self.__task.ai_channels.add_ai_voltage_chan(
                     physical_channel = self.channel,
                     units = nid.constants.VoltageUnits.VOLTS
@@ -67,19 +108,10 @@ class AnalogInputChannel:
         else:
             self.__channel = None
             self.__print__("Should 'add_ai_voltage...'")
-            
+
+        # Configure this channel
         self.configuration = configuration
         self.input_range = voltage_range
-        
-        self.gnd_pin = self.__gnd_pin__()
-    
-    @property
-    def streamer(self):
-        return self.__streamer
-    
-    @streamer.setter
-    def streamer(self, streamer):
-        self.__streamer = streamer
     
     @property
     def configuration(self):
@@ -88,6 +120,7 @@ class AnalogInputChannel:
     @configuration.setter
     def configuration(self, mode):
         
+        # Recognize mode
         partial_keys = {
              ('&', 'ps') : conf.PSEUDODIFFERENTIAL,
              'dif' : conf.DIFFERENTIAL,
@@ -96,13 +129,15 @@ class AnalogInputChannel:
              }
         mode = fst.string_recognizer(mode, partial_keys)
         
+        # Check if I need to reconfigure
         try:
-            self.__configuration
+            condition = self.__configuration == mode
         except:
-            self.__configuration = None
+            condition = False
         
-        if self.__configuration != mode:
-            if self.conection:
+        # Reconfigure if needed
+        if not condition:
+            if not self.test_mode:
                 self.__channel.ai_term_cfg = mode
             else:
                 self.__print__("Should 'ai_term_cfg'")
@@ -117,16 +152,21 @@ class AnalogInputChannel:
         
         voltage_range = list(voltage_range)
         
+        # Check if I need to reconfigure
         try:
-            self.__range
+            condition = self.__range == voltage_range
         except:
-            self.__range = [None, None]
+            condition = False
         
-        if self.__range != voltage_range:
-            if self.__range[0] != voltage_range[0]:
-                self.input_min = voltage_range[0]
-            if self.__range[1] != voltage_range[1]:
-                self.input_max = voltage_range[1]
+        # Reconfigure if needed
+        if not condition:
+            try:
+                if self.__range[0] != voltage_range[0]:
+                    self.input_min = voltage_range[0]
+                if self.__range[1] != voltage_range[1]:
+                    self.input_max = voltage_range[1]
+            except AttributeError:
+                self.__range = voltage_range
             self.__range = voltage_range
     
     @property
@@ -136,13 +176,15 @@ class AnalogInputChannel:
     @input_min.setter
     def input_min(self, voltage):
         
+        # Check if I need to reconfigure
         try:
-            self.__input_min
+            condition = self.__input_min == voltage
         except:
-            self.__input_min = None
+            condition = False
         
-        if self.__input_min != voltage:
-            if self.conection:
+        # Reconfigure if needed
+        if not condition:
+            if not self.test_mode:
                 self.__channel.ai_min = voltage
             else:
                 self.__print__("Should 'ai_min'")
@@ -156,18 +198,33 @@ class AnalogInputChannel:
     @input_max.setter
     def input_max(self, voltage):
 
+        # Check if I need to reconfigure
         try:
-            self.__input_max
+            condition = self.__input_max == voltage
         except:
-            self.__input_max = None
+            condition = False
         
-        if self.__input_max != voltage:
-            if self.conection:
+        # Reconfigure if needed
+        if not condition:
+            if self.test_mode:
                 self.__channel.ai_max = voltage
             else:
                 self.__print__("Should 'ai_max'")
             self.__input_max = voltage
             self.__range[1] = voltage
+    
+    @property
+    def gnd_pin(self):   
+        if self.configuration == conf.DIFFERENTIAL:
+            return self.__diff_gnd_pin__(self.pin)
+        elif self.configuration == conf.NRSE:
+            return 23
+        else:
+            return 28
+    
+    @gnd_pin.setter
+    def gnd_pin(self, value):
+        raise AttributeError("Can't modify this manually!")
     
     def __channel__(self, pin):
         
@@ -219,15 +276,25 @@ class AnalogInputChannel:
         except ValueError:
             message = "Wrong pin {} for analog input"
             raise ValueError(message.format(ai_pin))
-
-    def __gnd_pin__(self):
-        
-        if self.configuration == conf.DIFFERENTIAL:
-            return self.__diff_gnd_pin__(self.pin)
-        else:
-            return 28
     
     def __print__(self, message):
+        
+        """Only prints if self.print is True.
+        
+        Parameters
+        ----------
+        message : str
+            Message to print
+        
+        Returns
+        -------
+        nothing
+        
+        Raises
+        ------
+        print
+        
+        """
         
         if self.print:
             print(message)
@@ -236,50 +303,85 @@ class AnalogInputChannel:
 
 class PWMOutputChannel:
 
+    """Manages a PWM digital output channel for a NI USB 6212 DAQ.
+    
+    Parameters
+    ----------
+    device : str
+        NI device's name where PWM output channel/s should be put.
+    task : nidaqmx.Task()
+        NIDAQMX's task where this channels should be added.
+    streamer : nidaqmx.stream_writers class
+        NIDAMX's stream writer for this type of channel.
+    pin : int
+        Device's pin to initialize as PWM output channel/s.
+        
+    Other Parameters
+    ----------------
+    frequency=100e3 : int, float, optional
+        PWM's main frequency.
+    duty_cycle=.5 : int, float, {0 <= duty_cycle <= 1}, optional
+        PWM's duty cycle, which defines mean value of signal as 
+        'duty_cycle*max' where 'max' is the '+5' voltage.
+    print_messages=False : bool, optional
+        Whether to print messages or not.
+    test_mode=False : bool, optional
+        Allows to test classes even if you don't have a real 
+        conection with a NI USB 6212.
+        
+    Attributes
+    ----------
+    pin : int
+        Number of DAQ pin.
+    channel : str
+        Name of DAQ channel.
+    streamer : nidaqmx.stream_writers
+        DAQ's writing manager.
+    frequency : int, float
+        Digital PWM channel's main frequency.
+    duty_cycle : int, float {0<=duty_cycle<=1}
+        Digital PWM channel's duty cycle and therefore mean value's 
+        coefficient.
+    status : bool
+        Whether this digital PWM channel is on or off.
+    low_pin : int
+        Number of DAQ pin that holds digital GND (low value).
+    high_pin : int
+        Number of DAQ pin that holds digital +5 V (high value).
+    
+    Other Attributes
+    ----------------
+    write_mode : bool
+        Whether this is a writing class or a reading one.
+    test_mode : bool
+        Whether it's test mode (no real connection) or not.
+    print : bool
+        Whether to print inner messages or not.
+        
+    """      
+    
     def __init__(self, device, task, streamer, pin,
                  frequency=100e3, duty_cycle=0.5,
-                 print_messages=False, conection=True):
+                 print_messages=False, test_mode=False):    
 
-        """Initializes PWM digital output channel.
-        
-        Parameters
-        ----------
-        device : str
-            NI device's name where PWM output channel/s should be put.
-        task : nidaqmx.Task()
-            NIDAQMX's task where this channels should be added.
-        streamer : nidaqmx.stream_writers class
-            NIDAMX's stream writer for this type of channel.
-        pin : int
-            Device's pin to initialize as PWM output channel/s.
-        frequency=100e3 : int, float, optional
-            PWM's main frequency.
-        duty_cycle=.5 : int, float, {0 <= duty_cycle <= 1}, optional
-            PWM's duty cycle, which defines mean value of signal as 
-            'duty_cycle*max' where 'max' is the '+5' voltage.
-        print_messages=False : bool, optional
-            Whether to print messages or not.
-        conection=True : bool, optional
-            Whether you have a real conection with a NI USB 6212 or not. 
-            Allows to test classes.
-        """          
-        
+        # First, set general DAQ attributes        
         self.__device = device
         self.__task = task
-        self.__streamer = streamer
+        self.streamer = streamer
 
-        self.conection = conection
-        if not conection:
+        # Is there a real DAQ connected or are we just testing?
+        self.test_mode = test_mode
+        if test_mode:
             self.print = True
         else:
             self.print = print_messages
         
+        # Some general attributes of this channel
         self.pin = pin
         self.channel = self.__channel__(pin)
-        self.low = 37#[5, 11, 37, 43]
-        self.high = 42#[10, 42]
         
-        if conection:
+        # Add this channel to the DAQ
+        if not test_mode:
             ai_channel = self.__task.co_channels.add_co_pulse_chan_freq(
                 counter = self.channel,
                 units = nid.constants.FrequencyUnits.HZ
@@ -291,18 +393,27 @@ class PWMOutputChannel:
             self.__channel = None
             print("Should 'add_co_pulse_chan...'+'timing.cfg_impli...'")
         
-        self.__frequency = frequency
-        self.__duty_cycle = duty_cycle
+        # Configure this channel
         self.__status = False
+        self.frequency = frequency
+        self.duty_cycle = duty_cycle
+
+    @property
+    def low_pin(self):
+        return 37
+    
+    @low_pin.setter
+    def low_pin(self, value):
+        raise AttributeError("Can't modify this!")
     
     @property
-    def streamer(self):
-        return self.__streamer
-    
-    @streamer.setter
-    def streamer(self, streamer):
-        self.__streamer = streamer
-    
+    def high_pin(self, value):
+        return 42
+
+    @high_pin.setter
+    def high_pin(self, value):
+        raise AttributeError("Can't modify this!")    
+
     @property
     def duty_cycle(self):
         return self.__duty_cycle
@@ -310,8 +421,15 @@ class PWMOutputChannel:
     @duty_cycle.setter
     def duty_cycle(self, value):
         
-        if self.__duty_cycle != value:
-            if self.conection:
+        # Check if I need to reconfigure
+        try:
+            condition = self.__duty_cycle == value
+        except:
+            condition = False
+        
+        # Reconfigure if needed
+        if not condition:
+            if not self.test_mode:
                 self.__channel.co_pulse_duty_cyc = value
             else:
                 self.__print__("Should 'co_pulse_duty...'")
@@ -326,8 +444,15 @@ class PWMOutputChannel:
     @frequency.setter
     def frequency(self, value):
         
-        if self.__frequency != value:
-            if self.conection:
+        # Check if I need to reconfigure
+        try:
+            condition = self.__frequency == value
+        except:
+            condition = False
+        
+        # Reconfigure if needed
+        if not condition:
+            if not self.test_mode:
                 self.__channel.co_pulse_freq = value
             else:
                 self.__print__("Should 'co_pulse_freq'")
@@ -342,11 +467,20 @@ class PWMOutputChannel:
     @status.setter
     def status(self, key):
         
-        if self.__status != key:
-            if self.conection:
+        # Check if I need to reconfigure
+        try:
+            condition = self.__status == key
+        except:
+            condition = False
+ 
+        # Reconfigure if needed               
+        if not condition:
+            if isinstance(key, str):
+                key = True
+            if not self.test_mode:
                 if key:
                     self.__task.start()
-                    self.__streamer.write_one_sample_pulse_frequency(
+                    self.streamer.write_one_sample_pulse_frequency(
                             frequency = self.frequency,
                             duty_cycle = self.duty_cycle,
                             )
@@ -354,10 +488,7 @@ class PWMOutputChannel:
                     self.__task.end()
             else:
                 self.__print__("Should 'start' or 'stop'")
-            if isinstance(key, str):
-                self.__status = True
-            else:
-                self.__status = key
+            self.__status = key
     
     def __channel__(self, pin):
         
@@ -375,8 +506,6 @@ class PWMOutputChannel:
         """
         
         reference = [38, 39]
-#        reference = [1, 2, 3, 4, 6, 7, 8, 9, 33, 
-#                     34, 35, 36, 38, 39, 40, 41]
         
         try:
             channel = reference.index(pin)
@@ -387,6 +516,23 @@ class PWMOutputChannel:
             raise ValueError(message.format(pin))
     
     def __print__(self, message):
+        
+        """Only prints if self.print is True.
+        
+        Parameters
+        ----------
+        message : str
+            Message to print
+        
+        Returns
+        -------
+        nothing
+        
+        Raises
+        ------
+        print
+        
+        """
         
         if self.print:
             print(message)
