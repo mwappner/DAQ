@@ -7,11 +7,11 @@ This script is to analyse measurements made with NI DAQ.
 
 import fwp_analysis as anly
 import fwp_plot as fplt
-import fwp_save as sav
+#import fwp_save as sav
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-#import fwp_string as fstr
+import fwp_string as fstr
 from scipy.signal import find_peaks
 
 class Struct:
@@ -44,6 +44,7 @@ name = 'Samplerate_Sweep'
 samplerate = np.linspace(samplerate_min,
                          samplerate_max,
                          samplerate_n)
+                         
 duration = periods_to_meassure / signal_frequency
 
 folder = os.path.join(os.getcwd(),
@@ -68,17 +69,19 @@ ax = plt.axes()
 ax.set_xlabel("Tiempo (s)")
 ax.set_ylabel("Voltaje (V)")
 fplt.add_style(fig.number, linewidth=1)
-animation = fplt.animation_2D(
-        all_time, 
-        all_voltage,
-        label_function=lambda i : "Frec. muestreo {:.1f} Hz".format(
-                samplerate[i]),
-        frames_number=30,
-        fps=10,
-        new_figure=False)
-
-sav.saveanimation(animation,
-                  os.path.join(folder, 'Video.gif'))
+#animation = fplt.animation_2D(
+#        all_time, 
+#
+#        all_voltage,
+#        label_function=lambda i : "Frec. muestreo {:.1f} Hz".format(
+#                samplerate[i]),
+#        frames_number=30,
+#        fps=10,
+#        new_figure=False
+#        )
+#
+#sav.saveanimation(animation,
+#                  os.path.join(folder, 'Video.gif'))
 # This doesn't work and I'm not sure why. It does work saving it as mp4.
 
 samplerate, frequencies, fourier_peak = np.loadtxt(
@@ -243,15 +246,16 @@ actual_freq = sorted(list(signal_freqs.keys()))
 
 plt.plot(actual_freq, [signal_freqs[f].maybe_freq for f in actual_freq], '-o')
 
+
 #%% interbuffer time
 
-name = 'Interbuffer_Time'
+name = 'Interbuffer_Time_5'
 folder = os.path.join(os.getcwd(),
                       'Measurements',
                       name)
                       
 interbuferfile = os.path.join(
-        folder,'Interbuffer_Time.txt')
+        folder,'signal_1000Hz_2Vpp.txt')
 
 time, voltage = np.loadtxt(interbuferfile, unpack=True)
 dt=time[5]-time[4]
@@ -269,8 +273,45 @@ def Diffincent(u,dx):
     return Diff
 
 slopederivative=Diffincent(voltage,dt)
+
+
 #%% 
-plt.plot(time[2500:3800], slopederivative[2500:3800],'g-o')
+slopelimpio=slopederivative.copy()
+for i in range(len(slopelimpio)):
+    if i>0:
+        if slopelimpio[i]<-600000:
+            slopelimpio[i]=slopelimpio[i-1]
+
+
+#%% 
+axes = plt.gca()
+#axes.set_xlim([xmin,xmax])
+axes.set_ylim([2000,7000])
+#plt.plot(time[130:140], voltage[130:140],'r.')
+#plt.plot(time[130:140], slopederivative[130:140],'g.-')
+plt.plot(time[3000:5000],slopelimpio[3000:5000],'b.-')
+plt.xlabel('Time')
+plt.ylabel('First derivative of Signal')
+#plt.title(os.path.basename(f))
+plt.grid()
+plt.show()
+
+#%% 
+picos=find_peaks(slopelimpio, height=5000)
+
+xpicos=picos[0]
+deltapicos=np.zeros(len(xpicos)-1)
+for j in range(len(xpicos)-1): #for each column, that is to say for each channel
+    deltapicos[j]=xpicos[j+1]-xpicos[j]
+
+interbuffertimefinal=np.mean(deltapicos)
+
+
+
+
+#%% 
+#plt.plot(slopelimpio[130:140],'g-o')
+plt.plot(slopederivative[530:5500],'b-o')
 #plt.plot(time[2500:3800], voltage[2500:3800])
 plt.xlabel('Time')
 plt.ylabel('First derivative of Signal')
@@ -278,17 +319,18 @@ plt.title(os.path.basename(f))
 plt.grid()
 plt.show()
 
+
 #%% 
 # Make Fourier transformation and get main frequency
 samplerate = 400e3
-fourier = np.abs(np.fft.rfft(voltage)) # Fourier transformation
-fourier_frequencies = np.fft.rfftfreq(len(voltage), d=1./samplerate)
+fourier = np.abs(np.fft.rfft(slopederivative)) # Fourier transformation
+fourier_frequencies = np.fft.rfftfreq(len(slopederivative), d=1./samplerate)
 max_frequency = fourier_frequencies[np.argmax(fourier)]
 
 
 # Plot Fourier
 plt.figure()
-plt.plot(fourier_frequencies[1000:2000], fourier[1000:2000])
+plt.plot(fourier_frequencies, fourier)
 plt.xlabel('Frecuencia (Hz)')
 plt.ylabel('Intensidad de Fourier (ua)')
 plt.title('{}'.format(max_frequency))
@@ -296,55 +338,46 @@ plt.title('{}'.format(max_frequency))
 
 #%% Interchanneltime: cargo variables
 
-name = 'Interchannel_Time'
+name = 'Interchannel_Time_1000Hz'
 folder = os.path.join(os.getcwd(),
                       'Measurements',
                       name)
                       
 interchannelfile1 = os.path.join(
-        folder,'NChannels_1.txt')
+        folder,'NChannels_1_signal_10Hz.txt')
 time1, voltage1ch1 = np.loadtxt(interchannelfile1, unpack=True)
 
 interchannelfile2 = os.path.join(
-        folder,'NChannels_2.txt')
+        folder,'NChannels_2_signal_10Hz.txt')
 time2, voltage2ch1,voltage2ch2 = np.loadtxt(interchannelfile2, unpack=True)
 
 interchannelfile3 = os.path.join(
-        folder,'NChannels_3.txt')
+        folder,'NChannels_3_signal_10Hz.txt')
 time3, voltage3ch1,voltage3ch2,voltage3ch3 = np.loadtxt(interchannelfile3, unpack=True)
 
 interchannelfile4 = os.path.join(
-        folder,'NChannels_4.txt')
+        folder,'NChannels_4_signal_10Hz.txt')
 time4, voltage4ch1, voltage4ch2, voltage4ch3, voltage4ch4 = np.loadtxt(interchannelfile4, unpack=True)
-
-interchannelfile5 = os.path.join(
-        folder,'NChannels_5.txt')
-time5, voltage5ch1, voltage5ch2, voltage5ch3, voltage5ch4, voltage5ch5 = np.loadtxt(interchannelfile5, unpack=True)
-
-interchannelfile6 = os.path.join(
-        folder,'NChannels_6.txt')
-time6, voltage6ch1, voltage6ch2, voltage6ch3, voltage6ch4, voltage6ch5, voltage6ch6 = np.loadtxt(interchannelfile6, unpack=True)
-
 
 #%% 
 
 plt.plot(time2[1400:1700], voltage2ch1[1400:1700],'r-')
 plt.plot(time2[1400:1700], voltage2ch2[1400:1700],'b-')
 plt.xlabel('Time')
-plt.ylabel('coltage')
+plt.ylabel('Voltage')
 plt.grid()
 plt.show()
 
 #%% prueba 2
 
-name = 'Interchannel_Time'
+name = 'Interchannel_Time_1000Hz'
 folder = os.path.join(os.getcwd(),
                       'Measurements',
                       name)
 interchanneltime=[[],[],[],[],[]]
 #I've got 5 files with multiple channel adquisition. I want to see how interchannel value changes.
-for i in range(5):
-    interchannelfile = os.path.join(folder,'NChannels_{}.txt'.format(i+2)) #I choose the corresponding file
+for i in range(3):
+    interchannelfile = os.path.join(folder,'NChannels_{}_signal_10Hz.txt'.format(i+2)) #I choose the corresponding file
     datos= np.loadtxt(interchannelfile, unpack=True) # I load the file data
     time=datos[0,:]#first set of values are time
     voltage = [datos[d, :] for d in range(1, datos.shape[0])] #the rest are the voltages for each channel
