@@ -2,6 +2,7 @@
 /Measurements
 *.pdf
 *.png
+idea.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
