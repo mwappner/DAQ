@@ -39,8 +39,8 @@ task = daq.Task(device, mode='w')
 
 # Configure output
 task.add_channels(fch.PWMOutputChannel, pwm_pin)
-task.all.frequency = pwm_frequency
-task.all.duty_cycle = pwm_duty_cycle[0]
+task.channels.frequency = pwm_frequency
+task.channels.duty_cycle = pwm_duty_cycle[0]
 """Could do all this together:
 task.add_channels(fch.PWMOutputChannel, pwm_pin,
                   frequency = pwm_frequency,
@@ -48,9 +48,9 @@ task.add_channels(fch.PWMOutputChannel, pwm_pin,
 """    
 
 # Turn on and off the output
-task.all.status = True # turn on
+task.channels.status = True # turn on
 sleep(10)
-task.all.status = False # turn off
+task.channels.status = False # turn off
 
 # End communication
 task.close()
@@ -73,18 +73,18 @@ task = daq.Task(device, mode='w')
 
 # Configure output
 task.add_channels(fch.PWMOutputChannel, pwm_pin)
-task.all.frequency = pwm_frequency
-task.all.duty_cycle = pwm_duty_cycle[0]
+task.channels.frequency = pwm_frequency
+task.channels.duty_cycle = pwm_duty_cycle[0]
 
 # Make a sweep on output's duty cycle
-task.all.status = True # turn on
+task.channels.status = True # turn on
 for dc in pwm_duty_cycle:
-    task.all.duty_cycle = dc # change duty cycle
+    task.channels.duty_cycle = dc # change duty cycle
     """ Could also call by channel:
     task.ctr0.duty_cycle = dc
     """
     sleep(2)
-task.all.status = False # turn off
+task.channels.status = False # turn off
 
 # End communication
 task.close()
@@ -110,7 +110,7 @@ task = daq.Task('Dev1', mode='r', conection=False)
         
 # Configure input
 task.add_channels(fch.AnalogInputChannel, *ai_pins)
-task.all.configuration = ai_conf
+task.channels.configuration = ai_conf
 
 # Make a measurement
 signal = task.read(nsamples_total=10000, 
@@ -146,7 +146,7 @@ task = daq.Task(device, mode='r')
         
 # Configure input
 task.add_channels(fch.AnalogInputChannel, *ai_pins)
-task.all.configuration = ai_conf
+task.channels.configuration = ai_conf
 
 # Make a continuous measurement
 signal = task.read(nsamples_total=None, # None means continuous
