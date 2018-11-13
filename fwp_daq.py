@@ -646,22 +646,19 @@ class Task:
         else:
             self.__check_samplerate__(samplerate)
 
-        # Get a callback wrapper that wraps the user's if needed
-        wrapper_callback = CallbackWrapper(
-                self.__task, 
-                self.streamer, 
-                self.nchannels, 
-                self.print,
-                do_return,
-                nsamples_total, nsamples_each, 
-                callback, nsamples_callback)
+        # If callback needed, get a callback that wraps the user's
+        wrapper_callback, parameters = self.__wrapper_callback__(
+                nsamples_total,
+                callback)
+        """There, 'parameters' indicates whether the user's callback 
+        takes in a parameter or not"""
         
         # If wrapper callback needed, configure it.
-        if wrapper_callback.function is not None:
+        if wrapper_callback is not None:
             
             # Set default value for nsamples_callback
             if nsamples_callback is None:
-                self.nsamples_callback = nsamples_each
+                nsamples_callback = nsamples_each
             
             # Configure callback
             if not self.test_mode:
@@ -670,7 +667,21 @@ class Task:
                         wrapper_callback)
             else:
                 self.__print__("Should 'task.register_every...'")
-
+    
+        # If necessary, set array for the total acquired samples
+        if do_return:
+            signal = zeros((self.nchannels, nsamples_total),
+                           dtype=np.float64)
+        
+        # Just in case, be ready for measuring in tiny pieces
+        each_signal = zeros((self.nchannels,
+                             nsamples_each),
+                             dtype=np.float64)
+        message = "Number of {}-sized samples' arrays".format(
+                nsamples_each)
+        message = message + " read: {}"
+        ntimes = 0
+    
         # SINGLE ACQUISITION
         if nsamples_total is not None:
     
@@ -683,21 +694,20 @@ class Task:
                 self.__print__("Should 'task.timing.cfg...'")
             
             # According to wrapper callback...
-            condition = wrapper_callback.function is None
-            if condition or not wrapper_callback.callback_parameters:
+            if wrapper_callback is None or not parameters:
                 
                 if do_return:                    
                     # Just measure
                     if not self.test_mode:
                         self.__task.start()
                         self.__streamer.read_many_sample(
-                            wrapper_callback.signal, 
+                            signal, 
                             number_of_samples_per_channel=nsamples_total,
                             timeout=20)
                         self.__task.stop()
                     else:
                         self.__print__("Should 'start'+'read_ma...'+'stop'")
-                    return wrapper_callback.signal
+                    return signal
                 else:
                     # No need to measure
                     return
@@ -705,9 +715,20 @@ class Task:
             else:
                 
                 self.__task.start()
+#                while True:
+#                    try:
+#                        'a'
+#                    except KeyboardInterrupt:
+#                        if do_return:
+#                            return signal
+#                        else:
+#                            return
                 self.__task.wait_until_done()
                 self.__task.stop()
-                return wrapper_callback.return_signal()
+                if do_return:
+                    return signal 
+                else:
+                    return
         
         # CONTINUOUS ACQUISITION
         else:
@@ -727,12 +748,24 @@ class Task:
             else:
                 self.__print__("Should run 'task.start'")
             print("Acquiring... Press Ctrl+C to stop.")
+#            while True:
+#                try:
+#                    'a'
+#                except KeyboardInterrupt:
+#                    self.__task.stop()
+#                    if do_return:
+#                        return signal
+#                    else:
+#                        return
             try:
                 self.__task.wait_until_done()
             except KeyboardInterrupt:
                 pass
             self.__task.stop()
-            return wrapper_callback.return_signal()
+            if do_return:
+                return signal 
+            else:
+                return
     
     def write(self, status=True, frequency=None, duty_cycle=None):
     
@@ -813,6 +846,168 @@ class Task:
         """
         
         self.__task.close()
+    
+    def __wrapper_callback__(self, nsamples_total, callback):
+
+        # See if callback has any parameters
+        if callback is None:
+            callback_parameters = False             
+        else:            
+            callback_parameters = spec.getfullargspec(callback)[0]
+            if len(callback_parameters)>1:
+                raise ValueError("Callback must have only 1 variable")
+            callback_parameters = bool(callback_parameters)
+
+        # Now choose the right callback wrapper
+        if nsamples_total is not None: # SINGLE ACQUISITION
+            if callback is None:
+                return self.__get_wrapper_callback__(0)
+            elif not callback_parameters:
+                return self.__get_wrapper_callback__(1)
+            else:
+                return self.__get_wrapper_callback__(2)
+        else: # CONTINUOUS ACQUISITION
+            if callback is None:
+                return self.__get_wrapper_callback__(3)
+            elif not callback_parameters:
+                return self.__get_wrapper_callback__(4)
+            else:
+                return self.__get_wrapper_callback__(5)
+    
+    def __get_wrapper_callback__(self, option):
+        
+        # These are the possible wrapper callbacks
+        def no_callback(task_handle, 
+                        every_n_samples_event_type,
+                        number_of_samples, callback_data):
+            
+            """A nidaqmx callback that just reads"""
+            
+            global do_return, nsamples_each
+            global ntimes, message
+            global each_signal, signal
+            
+            if do_return:
+            
+                each_signal = self.__streamer.read_many_sample(
+                    each_signal,
+                    number_of_samples_per_channel=nsamples_callback,
+                    timeout=20)
+                
+                signal = multiappend(signal, each_signal)
+            ntimes =+ 1
+            self.__print__(message.format(ntimes))
+            
+            return 0
+
+        def wrap_callback(task_handle, 
+                               every_n_samples_event_type,
+                               number_of_samples, callback_data):
+            
+            """A nidaqmx callback that wrapps, reads and stops"""
+
+            global callback
+            
+            callback()
+                
+            return 0
+        
+        def noarg_callback(task_handle, 
+                          every_n_samples_event_type,
+                          number_of_samples, callback_data):
+            
+            """A nidaqmx callback that just wrapps"""
+            
+            global callback
+            global do_return, nsamples_callback
+            global ntimes, message
+            global each_signal, signal
+            
+            callback()
+            
+            if do_return:
+            
+                each_signal = self.__streamer.read_many_sample(
+                    each_signal,
+                    number_of_samples_per_channel=nsamples_callback,
+                    timeout=20)
+                
+                signal = multiappend(signal, each_signal)
+            ntimes =+ 1
+            self.__print__(message.format(ntimes))            
+            
+            return 0
+        
+        def arg_callback(task_handle, 
+                          every_n_samples_event_type,
+                          number_of_samples, callback_data):
+            
+            """A nidaqmx callback that wrapps and reads"""
+            
+            global callback
+            global do_return, nsamples_callback
+            global ntimes, message
+            global each_signal, signal
+            
+            each_signal = self.__streamer.read_many_sample(
+                each_signal,
+                number_of_samples_per_channel=nsamples_callback,
+                timeout=20)
+            
+            callback(each_signal)
+            
+            if do_return:
+                signal = multiappend(signal, each_signal)
+            ntimes =+ 1
+            self.__print__(message.format(ntimes))
+            
+            return 0
+        
+        def stop_callback(task_handle, 
+                               every_n_samples_event_type,
+                               number_of_samples, callback_data):
+            
+            """A nidaqmx callback that wrapps, reads and stops"""
+            
+            global callback
+            global do_return, nsamples_callback, nsamples_total
+            global ntimes, message
+            global each_signal, signal
+            
+            nsamples = ntimes * nsamples_callback
+            if nsamples <= nsamples_total:
+                
+                each_signal = self.__streamer.read_many_sample(
+                    each_signal,
+                    number_of_samples_per_channel=nsamples_callback,
+                    timeout=20)
+                
+                callback(each_signal)
+                
+                if do_return:
+                    signal = multiappend(signal, each_signal)
+                ntimes =+ 1
+                self.__print__(message.format(ntimes))
+                
+            else:
+#                raise KeyboardInterrupt
+                self.__task.control(task_states.TASK_STOP)
+            
+            return 0
+        
+        # This is the algorithm to choose 
+        # Option must be an int from 0 to 5
+        wrapper_callback = [None,
+                            wrap_callback,
+                            stop_callback,
+                            no_callback,
+                            noarg_callback,
+                            arg_callback]
+        
+        try:
+            return wrapper_callback[option]
+        except IndexError:
+            raise KeyError("No callback wrapper found")
         
     def __check_samplerate__(self, samplerate):
         
@@ -844,221 +1039,3 @@ class Task:
         
         if self.print:
             print(message)
-
-#%%
-
-"""HOUSTON! WE'VE GOT A PROBLEM!
-
-class Clase:
-    def __init__(self):
-        self.memory = 0
-    def function(self):
-        self.memory += 1
-        return self.memory
-    def __call__(self):
-        return self.function()
-c = Clase()
-c.memory
->> 0
-c.function()
->> 1
-c()
->> 1 # This should be 2 :_____(
-function = c.function
-function()
->> 1 # At least, this should be 2 :________(
-
-"""
-
-class CallbackWrapper:
-    
-    def __init__(self, task, streamer, 
-                 nchannels, print_messages, do_return,
-                 nsamples_total, nsamples_each, 
-                 callback, nsamples_callback):
-
-        # These are basic parameters which must be inherited from Task
-        self.task = task
-        self.streamer = streamer
-        self.nchannels = nchannels
-        self.print = print_messages
-        self.do_return = do_return
-        
-        # These are some parameters needed for callback wrapper
-        self.nsamples_total = nsamples_total
-        self.nsamples_each = nsamples_each
-        self.callback = callback
-        self.nsamples_callback = nsamples_callback
-
-        # These are arrays to be filled with acquired data
-        self.signal = zeros((nchannels, nsamples_total),
-                            dtype=np.float64) # all data if needed
-        self.each_signal = zeros((nchannels, nsamples_each),
-                                 dtype=np.float64) # each piece of data
-        
-        # This saves how many times the wrapper callback has been run
-        self.ntimes = 0
-
-        # To choose a callback, see if callback has any parameters
-        if callback is None:
-            self.callback_parameters = False             
-        else:            
-            self.callback_parameters = spec.getfullargspec(callback)[0]
-            if len(self.callback_parameters)>1:
-                raise ValueError("Callback must have only 1 variable")
-            self.callback_parameters = bool(self.callback_parameters)
-
-        # Finally, this is the actual callback wrapper function
-        self.function = self.__choose_wrapper__()
-    
-    def __call__(self, *args):
-        
-        return self.function(*args)
-        
-    def return_signal(self):
-        
-        if self.do_return:
-            return self.signal
-        else:
-            return        
-    
-    def __choose_wrapper__(self):
-
-        # Now choose the right callback wrapper
-        if self.nsamples_total is not None: # SINGLE ACQUISITION
-            if self.callback is None:
-                return self.__get_wrapper__(0)
-            elif not self.callback_parameters:
-                return self.__get_wrapper__(1)
-            else:
-                return self.__get_wrapper__(2)
-        else: # CONTINUOUS ACQUISITION
-            if self.callback is None:
-                return self.__get_wrapper__(3)
-            elif not self.callback_parameters:
-                return self.__get_wrapper__(4)
-            else:
-                return self.__get_wrapper__(5)
-    
-    def __get_wrapper__(self, option):
-
-        # These are the possible callback wrappers
-        def wrap_callback(task_handle, 
-                          every_n_samples_event_type,
-                          number_of_samples, callback_data):
-            
-            """A nidaqmx callback that just wrapps"""
-            
-            self.callback()
-                
-            return 0
-        
-        def no_callback(task_handle, 
-                        every_n_samples_event_type,
-                        number_of_samples, callback_data):
-            
-            """A nidaqmx callback that just reads"""
-            
-            if self.do_return:
-            
-                self.each_signal = self.streamer.read_many_sample(
-                    self.each_signal,
-                    number_of_samples_per_channel=self.nsamples_each,
-                    timeout=20)
-                
-                self.signal = multiappend(self.signal, self.each_signal)
-            self.ntimes += 1
-            self.__print_ntimes__()
-            
-            return 0
-        
-        def noarg_callback(task_handle, 
-                          every_n_samples_event_type,
-                          number_of_samples, callback_data):
-            
-            """A nidaqmx callback that just wrapps"""
-            
-            self.callback()
-            
-            if self.do_return:
-            
-                self.each_signal = self.__streamer.read_many_sample(
-                    self.each_signal,
-                    number_of_samples_per_channel=self.nsamples_each,
-                    timeout=20)
-                
-                self.signal = multiappend(self.signal, self.each_signal)
-            self.ntimes += 1
-            self.__print_ntimes__()
-            
-            return 0
-        
-        def arg_callback(task_handle, 
-                          every_n_samples_event_type,
-                          number_of_samples, callback_data):
-            
-            """A nidaqmx callback that wrapps and reads"""
-            
-            self.each_signal = self.__streamer.read_many_sample(
-                self.each_signal,
-                number_of_samples_per_channel=self.nsamples_each,
-                timeout=20)
-            
-            self.callback(self.each_signal)
-            
-            if self.do_return:
-                self.signal = multiappend(self.signal, self.each_signal)
-            self.ntimes += 1
-            self.__print_ntimes__
-            
-            return 0
-        
-        def stop_callback(task_handle, 
-                               every_n_samples_event_type,
-                               number_of_samples, callback_data):
-            
-            """A nidaqmx callback that wrapps, reads and stops"""
-            
-            nsamples = self.ntimes * self.nsamples_callback
-            if nsamples <= self.nsamples_total:
-                
-                self.each_signal = self.__streamer.read_many_sample(
-                    self.each_signal,
-                    number_of_samples_per_channel=self.nsamples_each,
-                    timeout=20)
-                
-                self.callback(self.each_signal)
-                
-                if self.do_return:
-                    self.signal = multiappend(self.signal, 
-                                              self.each_signal)
-                self.ntimes += 1
-                self.__print_ntimes__
-                
-            else:
-#                raise KeyboardInterrupt
-                self.task.control(task_states.TASK_STOP)
-            
-            return 0
-        
-        # This is the algorithm to choose 
-        # Option must be an int from 0 to 5
-        wrapper_callback = [None,
-                            wrap_callback,
-                            stop_callback,
-                            no_callback,
-                            noarg_callback,
-                            arg_callback]
-        
-        try:
-            return wrapper_callback[option]
-        except IndexError:
-            raise KeyError("No callback wrapper found")
-        
-    def __print_ntimes__(self):
-        
-        message = "Number of read {}-sized samples' arrays: {}"
-                   
-        if self.print:
-            print(message.format(self.nsamples_each, 
-                                 self.ntimes))
