@@ -192,7 +192,6 @@ def savetxt(file, datanumpylike, overwrite=False, header='', footer=''):
         Indicates whether to overwrite or not.
     header='' : list, str, optional
         Data's descriptor. Its elements should be str, one per column.
-        But footer could also be one string.
     footer='' : dict, str, optional
         Data's specifications. Its elements and keys should be str. 
         But footer could also be one string. Otherwise, an element 

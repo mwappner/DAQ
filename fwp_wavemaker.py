@@ -459,7 +459,7 @@ class MultichannelWave:
 
     @frequency.setter
     def frequency(self, value):
-        raise ValueError('Frequency should be set for each wave individually. Use self.waves.frequency.')
+        raise AttributeError('Frequency should be set for each wave individually. Use self.waves.frequency.')
     
     @property
     def amplitude(self):
@@ -467,7 +467,7 @@ class MultichannelWave:
     
     @amplitude.setter
     def amplitude(self, value):
-        raise ValueError('Amplitude should be set for each wave individually. Use self.waves.amplitude.')
+        raise AttributeError('Amplitude should be set for each wave individually. Use self.waves.amplitude.')
 
     @property
     def waveform(self):
@@ -475,7 +475,7 @@ class MultichannelWave:
         
     @waveform.setter
     def waveform(self, value):
-        raise ValueError('Waveform should be set for each wave individually. Use self.waves.waveform.')
+        raise AttributeError('Waveform should be set for each wave individually. Use self.waves.waveform.')
 
     @property
     def nchannels(self):
@@ -483,7 +483,7 @@ class MultichannelWave:
 
     @nchannels.setter
     def nchannels(self, value):
-        raise ValueError('nchannels can not be set.')
+        raise AttributeError('nchannels can not be set.')
 
     def evaluate(self, *args, **kwargs):
         '''Takes in an array-like object to evaluate the funcion in.

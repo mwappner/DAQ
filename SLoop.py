@@ -393,10 +393,9 @@ nsamples_callback = 20
 samplingrate = 100e3
 nsamples_each = 1000
 
-#pid = fan.PIDController(setpoint=1, kp=10, ki=5, kd=7, 
-#                        dt=1/samplingrate)
-pid = fan.PIDControllerWithLog(setpoint=1, kp=10, ki=5, kd=7, 
-                               dt=1/samplingrate)
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! NO ES ESTE EL dt, depende de cada cuanto le pasamos datos al PID
+pid = fan.PIDController(setpoint=1, kp=10, ki=5, kd=7, 
+                        dt=1/samplingrate, log_data=True)
 
 # ACTIVE CODE
 
@@ -424,14 +423,7 @@ def callback(task_handle, every_n_samples_event_type,
                                            height=2)
     velocity = angular_velocity * wheel_radius
     new_dc = pid.calculate(velocity)
-    
-#    # Then I save some data
-#    log.append([velocity, 
-#                new_dc, 
-#                pid.p_term, 
-#                pid.i_term, 
-#                pid.d_term])
-    
+      
     # And finally I change duty cycle
     task.ouputs.duty_cycle = fan.clip_bewtween(new_dc, *(0,100))
 
@@ -450,16 +442,16 @@ task.outputs.status = False
 task.close()
 
 # Save log
+log = np.array(pid.log).T  # Categories by columns
+header=['Feedback value (m/s)', 'New value (a.u.)', 'Proportional term (u.a.)',
+        'Integral term (u.a.)', 'Derivative term (u.a.)']
+footer=dict(ai_conf=ai_conf,
+            pwm_frequency=pwm_frequency,
+            pid=pid, # PID parameters
+            samplerate=samplingrate,
+            nsamples_each=nsamples_each,
+            nsamples_callback=nsamples_callback)
+
+
 sav.savetxt(os.path.join(os.getcwd(), 'Measurements', 'Log.txt'),
-            np.array(pid.log),
-            header=['Feedback value (m/s)',
-                    'New value (a.u.)',
-                    'Proportional term (u.a.)',
-                    'Integral term (u.a.)',
-                    'Derivative term (u.a.)'],
-            footer=dict(ai_conf=ai_conf,
-                        pwm_frequency=pwm_frequency,
-                        pid=str(pid.__class__),
-                        samplerate=samplingrate,
-                        nsamples_each=nsamples_each,
-                        nsamples_callback=nsamples_callback))
+             log, header=header, footer=footer)

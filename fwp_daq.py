@@ -775,9 +775,69 @@ class Task:
         ----------
         none
         
+<<<<<<< HEAD
+    @property
+    def pins(self):
+        return self.__pins
+    
+    @pins.setter
+    def pins(self, value=None):
+        raise AttributeError("You shouldn't modify this manually!")
+    
+    @property
+    def ninputs(self):
+        return self.__ninputs
+    
+    @ninputs.setter
+    def ninputs(self, value=None):
+        self.__print__("Can't modify this manually. Auto-updating...")
+        channels = [k for k,v in self.pins.items() if 'in' in v.lower()]
+        self.__ninputs = len(channels)
+
+    @property
+    def noutputs(self):
+        return self.__noutputs
+    
+    @noutputs.setter
+    def noutputs(self, value=None):
+        self.__print__("Can't modify this manually. Auto-updating...")
+        channels = [k for k,v in self.pins.items() if 'out' in v.lower()]
+        self.__noutputs = len(channels)
+    
+    @property
+    def analog_inputs(self):
+        return self.__analog_inputs
+    
+    @analog_inputs.setter
+    def analog_inputs(self, value=None):
+        raise AttributeError("Must use 'add_analog_inputs'!")
+
+    def add_analog_inputs(self, *pins, **kwargs):
+        new_channels = self.__rtask.add_channels(fch.AnalogInputChannel, 
+                                                 *pins, **kwargs)
+        self.reader()
+        self.__pins.update(new_channels)
+        self.__analog_inputs.update(new_channels)
+    
+    @property
+    def pwm_outputs(self, *pins, **kwargs):
+        return self.__pwm_outputs
+    
+    @pwm_outputs.setter
+    def pwm_outputs(self, value=None):
+        raise AttributeError("Must use 'add_pwm_outputs'!")
+
+    def add_pwm_outputs(self, *pins, **kwargs):
+        new_channels = self.__wtask.add_channels(fch.PWMOutputChannel, 
+                                                 *pins, **kwargs)
+        self.writer()
+        self.__pins.update(new_channels)
+        self.__pwm_outputs.update(new_channels)
+=======
         Returns
         -------
         nothing
+>>>>>>> a9e8d0b9621af697565ac4b5099f04414ef84079
         
         See Also
         --------
