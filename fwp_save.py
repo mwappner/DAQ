@@ -116,12 +116,8 @@ def free_file(my_file, newformat='{}_{}'):
             free_file = os.path.splitext(free_file)[0]
             free_file = free_file.split(sepformat[-2])[-1]
             try:
-                free_file = free_file.split(sepformat[-1])[0]
-            except ValueError:
-                free_file = free_file
-            try:
                 free_file = newformat.format(
-                        os.path.splitext(my_file)[1],
+                        os.path.splitext(my_file)[0],
                         str(int(free_file)+1),
                         )
             except ValueError:
@@ -196,7 +192,6 @@ def savetxt(file, datanumpylike, overwrite=False, header='', footer=''):
         Indicates whether to overwrite or not.
     header='' : list, str, optional
         Data's descriptor. Its elements should be str, one per column.
-        But footer could also be one string.
     footer='' : dict, str, optional
         Data's specifications. Its elements and keys should be str. 
         But footer could also be one string. Otherwise, an element 
@@ -235,9 +230,11 @@ def savetxt(file, datanumpylike, overwrite=False, header='', footer=''):
                     if isinstance(value, tuple) and len(value) == 2:
                         condition = isinstance(value[0], str)
                         if not condition and isinstance(value[1], str):
-                            value = "'{} {}'".format(*value)
+                            value = '"{} {}"'.format(*value)
+                    elif isinstance(value, str):
+                        value = '"{}"'.format(value)
                     aux.append('{}={}'.format(key, value) + ', ')
-                footer = aux
+                footer = ''.join(aux)
             except:
                 TypeError('Header should be a dict or a string')
 
@@ -470,6 +467,7 @@ def retrieve_footer(file, comment_marker='#'):
     if last_line[0] == comment_marker:
         try:
             last_line = last_line.split(comment_marker + ' ')[-1]
+            last_line = last_line.split('\n')[0]
             footer = eval('dict({})'.format(last_line))
             for key, value in footer.items():
                 try:
@@ -528,6 +526,7 @@ def retrieve_header(file, comment_marker='#'):
     
     if first_line[0] == comment_marker:
         header = first_line.split(comment_marker + ' ')[-1]
+        first_line = first_line.split('\n')[0]
         header = header.split('\t')
         if len(header) > 1:
             return header
