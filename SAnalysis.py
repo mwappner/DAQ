@@ -489,8 +489,8 @@ time, voltage = np.loadtxt(settimefile, unpack=True)
 #
 #slopederivative=Diffincent(voltage,dt)
 #%% 
-a=390000
-b=400000
+a=65260
+b=65280
 timezoom=time[a:b]
 voltagezoom=voltage[a:b]
 
@@ -510,12 +510,23 @@ for i in range(1,len(voltagezoom)-1):
 for i in range(1,len(voltagezoom)-1):
     lownoisedata[i]=(lownoisedata[i-1]+lownoisedata[i]+lownoisedata[i+1])/3
   
+  
+font = {'family' : 'sans-serif',
+        'weight' : 'medium',
+        'size'   : 13}
+
+plt.rc('font', **font)
+
 ax = plt.gca()
-plt.plot(timezoom, voltagezoom,'b.')
-plt.plot(timezoom, lownoisedata,'g.')
+plt.plot(timezoom, voltagezoom,'b.-')
+#plt.plot(timezoom, lownoisedata,'g.')
 plt.xlabel('Time')
 plt.ylabel('voltage')
 plt.grid()
+plt.tight_layout()
+plt.ticklabel_format(axis='both', style='sci', useMathText=True, scilimits=(0,0))
+plt.tick_params(labelsize=12)
+plt.savefig('settlingtime1ch.pdf')
 plt.show()
 
 
@@ -542,13 +553,13 @@ step_info(timezoom,voltagezoom)
     
     
 #%%  Settlingtime para interchannel
-name = 'Interchannel_Time_Order_10000Hz'
+name = 'Interchannel_Time_Order'
 folder = os.path.join(os.getcwd(),
                       'Measurements',
                       name)
                       
 settimefile = os.path.join(
-        folder,'Channels_3210_10000Hz.txt')
+        folder,'Channels_0123.txt')
 
 datos= np.loadtxt(settimefile, unpack=True)
 time=datos[0,:]#first set of values are time
@@ -568,9 +579,9 @@ voltage = [datos[d,:] for d in range(1, datos.shape[0])]
 #    return Diff
 #
 #slopederivative=Diffincent(voltage,dt)
-
-a=0
-b=50
+#%% 
+a=12650
+b=12670
 timezoom=time[a:b]
 choosevoltage0=voltage[0]
 choosevoltage1=voltage[1]
@@ -626,7 +637,7 @@ plt.plot(timezoom, lownoisedata3,'k.-',label='4º Canal Medido')
 plt.ylabel('Voltaje [V]')
 plt.legend(loc='upper right')
 plt.xlabel('Time[s]')
-plt.savefig('10khzvoltaje3210.pdf')
+plt.savefig('10khzvoltaje0123.pdf')
 plt.tight_layout()
 plt.ticklabel_format(axis='both', style='sci', useMathText=True, scilimits=(0,0))
 plt.tick_params(labelsize=12)
