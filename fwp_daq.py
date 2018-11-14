@@ -398,7 +398,7 @@ class Task:
         self.__task = nid.Task()
 
         # Is this task meant to write or to read? Can't do both!
-        self.__write_mode = 'w' in 'write'.lower()
+        self.__write_mode = 'w' in mode.lower()
 
         # Is there a real DAQ connected or are we just testing?
         self.test_mode = test_mode
@@ -646,10 +646,20 @@ class Task:
         else:
             self.__check_samplerate__(samplerate)
 
+        # See if callback has any parameters
+        if callback is None:
+            callback_parameters = False             
+        else:            
+            callback_parameters = spec.getfullargspec(callback)[0]
+            if len(callback_parameters)>1:
+                raise ValueError("Callback must have only 1 variable")
+            callback_parameters = bool(callback_parameters)
+
         # If callback needed, get a callback that wraps the user's
-        wrapper_callback, parameters = self.__wrapper_callback__(
-                nsamples_total,
-                callback)
+        wrapper_callback = self.__choose_wrapper_callback__(
+            nsamples_total,
+            callback,
+            callback_parameters)
         """There, 'parameters' indicates whether the user's callback 
         takes in a parameter or not"""
         
@@ -694,7 +704,7 @@ class Task:
                 self.__print__("Should 'task.timing.cfg...'")
             
             # According to wrapper callback...
-            if wrapper_callback is None or not parameters:
+            if wrapper_callback is None or not callback_parameters:
                 
                 if do_return:                    
                     # Just measure
@@ -847,16 +857,8 @@ class Task:
         
         self.__task.close()
     
-    def __wrapper_callback__(self, nsamples_total, callback):
-
-        # See if callback has any parameters
-        if callback is None:
-            callback_parameters = False             
-        else:            
-            callback_parameters = spec.getfullargspec(callback)[0]
-            if len(callback_parameters)>1:
-                raise ValueError("Callback must have only 1 variable")
-            callback_parameters = bool(callback_parameters)
+    def __choose_wrapper_callback__(self, nsamples_total, 
+                                    callback, callback_parameters):
 
         # Now choose the right callback wrapper
         if nsamples_total is not None: # SINGLE ACQUISITION
@@ -888,14 +890,13 @@ class Task:
             global each_signal, signal
             
             if do_return:
-            
                 each_signal = self.__streamer.read_many_sample(
                     each_signal,
                     number_of_samples_per_channel=nsamples_callback,
                     timeout=20)
                 
                 signal = multiappend(signal, each_signal)
-            ntimes =+ 1
+            ntimes += 1
             self.__print__(message.format(ntimes))
             
             return 0
@@ -933,7 +934,7 @@ class Task:
                     timeout=20)
                 
                 signal = multiappend(signal, each_signal)
-            ntimes =+ 1
+            ntimes += 1
             self.__print__(message.format(ntimes))            
             
             return 0
@@ -958,7 +959,7 @@ class Task:
             
             if do_return:
                 signal = multiappend(signal, each_signal)
-            ntimes =+ 1
+            ntimes += 1
             self.__print__(message.format(ntimes))
             
             return 0
@@ -986,7 +987,7 @@ class Task:
                 
                 if do_return:
                     signal = multiappend(signal, each_signal)
-                ntimes =+ 1
+                ntimes += 1
                 self.__print__(message.format(ntimes))
                 
             else:
