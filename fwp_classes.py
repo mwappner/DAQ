@@ -26,9 +26,16 @@ class NoNoneList(list):
     
     """A list that doesn't append None elements"""
     
+    def __init__(self, *iterable, show_exceptions=True):
+        super().__init__(iterable)
+        self.show_exceptions = show_exceptions
+    
     def append(self, item):
         if item is not None:
-            super(NoNoneList, self).append(item)
+            super().append(item)
+        else:
+            if self.show_exceptions:
+                raise TypeError("Can't append a None element")
 
 #%%       
 
@@ -91,7 +98,7 @@ class DynamicDict(dict):
     def is_empty(self, key=None):
         
         if key is None:
-            return len(list(self.keys())) == 0
+            return not bool(self)
         elif key in self.keys():
             return False
         else:
