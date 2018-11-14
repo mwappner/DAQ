@@ -276,28 +276,96 @@ slopederivative=Diffincent(voltage,dt)
 
 
 #%% 
-slopelimpio=slopederivative.copy()
+slopelimpio=slopederivative[0:130000].copy()
 for i in range(len(slopelimpio)):
     if i>0:
-        if slopelimpio[i]<-600000:
+        if slopelimpio[i]<-700000:
             slopelimpio[i]=slopelimpio[i-1]
+            
 
 
 #%% 
 axes = plt.gca()
 #axes.set_xlim([xmin,xmax])
-axes.set_ylim([2000,7000])
-#plt.plot(time[130:140], voltage[130:140],'r.')
-#plt.plot(time[130:140], slopederivative[130:140],'g.-')
-plt.plot(time[3000:5000],slopelimpio[3000:5000],'b.-')
+#axes.set_ylim([-1,1])
+#plt.plot(time[0:2000], voltage[0:2000],'r.-')
+plt.plot(time[0:11000], slopederivative[0:11000],'g.-')
+#plt.plot(time,slopelimpio,'b.')
 plt.xlabel('Time')
 plt.ylabel('First derivative of Signal')
 #plt.title(os.path.basename(f))
 plt.grid()
 plt.show()
 
+        
+#%%     
+font = {'family' : 'sans-serif',
+        'weight' : 'medium',
+        'size'   : 13}
+
+plt.rc('font', **font)
+
+
+fig, axs = plt.subplots(2, 1, sharex=True)
+fig.subplots_adjust(hspace=0)
+fig.set_size_inches(7,4)
+
+axs[0].plot(time[0:3000], voltage[0:3000], 'r.-')
+#axs[0].set_yticks(np.arange(-0.9, 1.0, 0.4))
+axs[0].set_ylim(-2.1, 2.1)
+axs[0].grid(color='silver', linestyle='--', linewidth=2)
+axs[0].set_ylabel('Voltaje [V]')
+
+axs[1].plot(time[0:3000],slopederivative[0:3000],'g.-')
+#axs[1].set_yticks(np.arange(0.1, 1.0, 0.2))
+axs[1].set_ylim(-810000,10000)
+axs[1].set_xticks([time[0], time[1024], time[2048]])
+#plt.title(os.path.basename(f))
+axs[1].grid(color='silver', linestyle='--', linewidth=2)
+axs[1].set_ylabel('dV/dt [V/s]')
+plt.xlabel('Time[s]')
+plt.tight_layout()
+plt.ticklabel_format(axis='both', style='sci', useMathText=True, scilimits=(0,0))
+plt.tick_params(labelsize=12)
+plt.savefig('1k3000puntos.pdf')
+plt.show()
+
+
 #%% 
-picos=find_peaks(slopelimpio, height=5000)
+#ejemplo con la cantidad justa de datos
+datos = np.linspace(0,10, 500, endpoint=False)
+datos = datos.reshape((10, -1)) #-1 hace que defina automáticamente el otro tamaño
+#datos ahora es de 10x50 
+
+#ejemplo con 1024 empezando de dos lugares
+#data = np.random.rand(int(1e6)) #un millón de datos random
+data = slopelimpio.copy()
+cant_buffers = 30 #cuántos voy a promediar
+
+data1 = np.reshape(data[:4095*cant_buffers], (4095, -1))
+data1 = np.mean(data1, axis=1)
+
+data2 = np.reshape(data[500:4095*cant_buffers+500], (4095, -1))
+data2 = np.mean(data2, axis=1)
+
+#%% 
+
+plt.plot(data2,'m.')
+plt.plot(data1,'b.')
+plt.xlabel('# Puntos')
+plt.ylabel('Promedio c/4095 puntos [V/dt]')
+#plt.title(os.path.basename(f))
+plt.grid()
+plt.tight_layout()
+plt.ticklabel_format(axis='both', style='sci', useMathText=True, scilimits=(0,0))
+plt.tick_params(labelsize=12)
+plt.savefig('signalmean1k.pdf')
+plt.show()
+
+
+
+#%% 
+picos=find_peaks(slopelimpio, height=42000)
 
 xpicos=picos[0]
 deltapicos=np.zeros(len(xpicos)-1)
@@ -308,19 +376,18 @@ interbuffertimefinal=np.mean(deltapicos)
 
 
 
-
 #%% 
-#plt.plot(slopelimpio[130:140],'g-o')
-plt.plot(slopederivative[530:5500],'b-o')
-#plt.plot(time[2500:3800], voltage[2500:3800])
-plt.xlabel('Time')
-plt.ylabel('First derivative of Signal')
-plt.title(os.path.basename(f))
-plt.grid()
-plt.show()
 
 
-#%% 
+
+
+
+
+
+
+
+
+
 # Make Fourier transformation and get main frequency
 samplerate = 400e3
 fourier = np.abs(np.fft.rfft(slopederivative)) # Fourier transformation
@@ -379,20 +446,23 @@ interchanneltime=[[],[],[],[],[]]
 for i in range(3):
     interchannelfile = os.path.join(folder,'NChannels_{}_signal_10Hz.txt'.format(i+2)) #I choose the corresponding file
     datos= np.loadtxt(interchannelfile, unpack=True) # I load the file data
-    time=datos[0,:]#first set of values are time
-    voltage = [datos[d, :] for d in range(1, datos.shape[0])] #the rest are the voltages for each channel
+    time=datos[0,0:10000]#first set of values are time
+    voltage = [datos[d, 0:10000] for d in range(1, datos.shape[0])] #the rest are the voltages for each channel
     deltavector=np.zeros_like(voltage)# I create an array to store values of voltage differences
     interchannelvoltage=np.zeros(len(voltage))#i create array to store mean voltage difference
     for j in range(len(voltage)): #for each column, that is to say for each channel
-        if j < len(voltage)-1: #if not the las channel
+        if j < len(voltage)-1: #if not the last channel
             deltavector[j,:]=voltage[j+1]-voltage[j]
         else: #if last channel
             deltavector[j,:]=voltage[j]-voltage[0]
         interchannelvoltage[j]=np.mean(deltavector[j,:])#mean voltage difference between channels
     interchanneltime[i]=interchannelvoltage/(2*10)#I store the values outside loop
     
-
-
+#%% 
+plt.plot(deltavector[0,:],'r.')
+plt.plot(deltavector[1,:],'g.')
+plt.plot(deltavector[2,:],'b.')
+plt.plot(deltavector[3,:],'m.')
 #%% 
 name = 'Settling_Time'
 folder = os.path.join(os.getcwd(),
@@ -419,16 +489,46 @@ time, voltage = np.loadtxt(settimefile, unpack=True)
 #
 #slopederivative=Diffincent(voltage,dt)
 #%% 
-a=65350
-b=85250
+a=390000
+b=400000
 timezoom=time[a:b]
 voltagezoom=voltage[a:b]
-plt.plot(timezoom, voltagezoom,'g')
+
+
+lownoisedata=np.zeros(len(voltagezoom))
+lownoisedata[0]=voltagezoom[0];
+lownoisedata[len(voltagezoom)-1]=voltagezoom[len(voltagezoom)-1]
+for i in range(1,len(voltagezoom)-1):
+    lownoisedata[i]=(voltagezoom[i-1]+voltagezoom[i]+voltagezoom[i+1])/3
+
+for i in range(1,len(voltagezoom)-1):
+    lownoisedata[i]=(lownoisedata[i-1]+lownoisedata[i]+lownoisedata[i+1])/3
+    
+for i in range(1,len(voltagezoom)-1):
+    lownoisedata[i]=(lownoisedata[i-1]+lownoisedata[i]+lownoisedata[i+1])/3
+
+for i in range(1,len(voltagezoom)-1):
+    lownoisedata[i]=(lownoisedata[i-1]+lownoisedata[i]+lownoisedata[i+1])/3
+  
+ax = plt.gca()
+plt.plot(timezoom, voltagezoom,'b.')
+plt.plot(timezoom, lownoisedata,'g.')
 plt.xlabel('Time')
 plt.ylabel('voltage')
 plt.grid()
 plt.show()
 
+
+#%% 
+from scipy.optimize import curve_fit
+def charge(t, tau, A):
+    Vout = A*(1-np.exp(-t/tau))
+    return Vout
+
+p0 = [1, 1]
+popt, pcov = curve_fit(charge,timezoom, lownoisedata,p0=p0)
+plt.plot(timezoom, charge(timezoom, popt[0],popt[1]),'b-')
+plt.plot(timezoom,lownoisedata,'r.')
 #%% 
 def step_info(t,yout):
     print "Overshoot: %f%s"%((yout.max()/yout[-1]-1)*100,'%')
@@ -441,7 +541,108 @@ step_info(timezoom,voltagezoom)
     
     
     
+#%%  Settlingtime para interchannel
+name = 'Interchannel_Time_Order_10000Hz'
+folder = os.path.join(os.getcwd(),
+                      'Measurements',
+                      name)
+                      
+settimefile = os.path.join(
+        folder,'Channels_3210_10000Hz.txt')
+
+datos= np.loadtxt(settimefile, unpack=True)
+time=datos[0,:]#first set of values are time
+voltage = [datos[d,:] for d in range(1, datos.shape[0])]
+#dt=time[5]-time[4]
+#
+#def Diffincent(u,dx):
+#    w=len(u)
+#    Diff=np.zeros(w)
+#    for i in range(w):
+#        if i == 0:
+#            Diff[0]=(u[1]-u[w-1])/(2*dx)
+#        elif i == w-1:
+#            Diff[i]=(u[0]-u[i-1])/(2*dx)
+#        else:
+#            Diff[i]=(u[i+1]-u[i-1])/(2*dx)
+#    return Diff
+#
+#slopederivative=Diffincent(voltage,dt)
+
+a=0
+b=50
+timezoom=time[a:b]
+choosevoltage0=voltage[0]
+choosevoltage1=voltage[1]
+choosevoltage2=voltage[2]
+choosevoltage3=voltage[3]
+voltagezoom0=choosevoltage0[a:b]
+voltagezoom1=choosevoltage1[a:b]
+voltagezoom2=choosevoltage2[a:b]
+voltagezoom3=choosevoltage3[a:b]
+
+lownoisedata0=np.zeros(len(voltagezoom0))
+lownoisedata0[0]=voltagezoom0[0];
+lownoisedata0[len(voltagezoom0)-1]=voltagezoom0[len(voltagezoom0)-1]
+for i in range(1,len(voltagezoom0)-1):
+    lownoisedata0[i]=(voltagezoom0[i-1]+voltagezoom0[i]+voltagezoom0[i+1])/3
     
+
+
+lownoisedata1=np.zeros(len(voltagezoom1))
+lownoisedata1[0]=voltagezoom1[0];
+lownoisedata1[len(voltagezoom1)-1]=voltagezoom1[len(voltagezoom1)-1]
+for i in range(1,len(voltagezoom1)-1):
+    lownoisedata1[i]=(voltagezoom1[i-1]+voltagezoom1[i]+voltagezoom1[i+1])/3
+    
+
+lownoisedata2=np.zeros(len(voltagezoom2))
+lownoisedata2[0]=voltagezoom2[0];
+lownoisedata2[len(voltagezoom2)-1]=voltagezoom2[len(voltagezoom2)-1]
+for i in range(1,len(voltagezoom2)-1):
+    lownoisedata2[i]=(voltagezoom2[i-1]+voltagezoom2[i]+voltagezoom2[i+1])/3
+    
+    
+lownoisedata3=np.zeros(len(voltagezoom3))
+lownoisedata3[0]=voltagezoom3[0];
+lownoisedata3[len(voltagezoom3)-1]=voltagezoom3[len(voltagezoom3)-1]
+for i in range(1,len(voltagezoom3)-1):
+    lownoisedata3[i]=(voltagezoom3[i-1]+voltagezoom3[i]+voltagezoom3[i+1])/3
+
+
+
+font = {'family' : 'sans-serif',
+        'weight' : 'medium',
+        'size'   : 13}
+
+plt.rc('font', **font)
+fig = plt.gcf()
+fig.set_size_inches(10,4)
+plt.plot(timezoom, lownoisedata0,'b.-', label='1º Canal Medido')
+plt.plot(timezoom, lownoisedata1,'g.-',label='2º Canal Medido')
+plt.plot(timezoom, lownoisedata2,'r.-',label='3º Canal Medido')
+plt.plot(timezoom, lownoisedata3,'k.-',label='4º Canal Medido')
+#plt.plot(timezoom, lownoisedata,'g.')
+plt.ylabel('Voltaje [V]')
+plt.legend(loc='upper right')
+plt.xlabel('Time[s]')
+plt.savefig('10khzvoltaje3210.pdf')
+plt.tight_layout()
+plt.ticklabel_format(axis='both', style='sci', useMathText=True, scilimits=(0,0))
+plt.tick_params(labelsize=12)
+plt.grid()
+plt.show()
+
+#%% 
+def step_info(t,yout):
+    print "Overshoot: %f%s"%((yout.max()/yout[-1]-1)*100,'%')
+    print "Rise Time: %fs"%(t[next(i for i in range(0,len(yout)-1) if yout[i]>yout[-1]*.90)]-t[0])
+    print "Settling Time: %fs"%(t[next(len(yout)-i for i in range(2,len(yout)-1) if abs(yout[-i]/yout[-1])>1.02)]-t[0])
+
+step_info(timezoom,voltagezoom)    
+    
+
+  
     
     
     
