@@ -5,7 +5,7 @@ This script is to make measurements with a National Instruments DAQ.
 @author: GrupoFWP
 """
 
-import fwp_analysis as anly
+from fwp_analysis import main_frequency
 import fwp_lab_instruments as ins
 import fwp_save as sav
 import matplotlib.pyplot as plt
@@ -135,7 +135,7 @@ with nid.Task() as task:
         np.savetxt(filename(sr), np.array([time, signal]).T, 
                    header=header)
         
-        max_frequency, fourier_peak = anly.main_frequency(signal, sr)
+        max_frequency, fourier_peak = main_frequency(signal, sr)
         fourier_data.append((sr, max_frequency, fourier_peak))
 
 sav.savetext(os.path.join(folder, 'Data.txt'), 
@@ -242,7 +242,7 @@ with nid.Task() as task:
                          header=header)
             
             # Get main frequency and Fourier amplitude
-            max_freq, fourier_peak = anly.main_frequency(signal, sr)
+            max_freq, fourier_peak = main_frequency(signal, sr)
             fourier_data.append((freq, max_freq, fourier_peak))
             
             sleep(10e-3)
