@@ -3,76 +3,35 @@
 This module contains tools for data analysis.
 
 Some of its most useful tools are:
-    
+
 mean : function
-    Returns average or weighted average and standard deviation.
+    Returns average or weighted average and standard deviation.    
+rms : function
+    Returns RMS value.
+smooth : function
+    Smooths data using a window with requested size.
+main_frequency(data, samplerate=44100):
+    Returns main frequency and its Fourier amplitude.
+peak_separation : function
+    Calculates mean peak separation.
+PIDController : class
+    PID contoller that keeps a log.
 linear_fit : function
     Applies linear fit and returns m, b and Rsq. Can also plot it.
 nonlinear_fit : function
     Applies nonlinear fit and returns parameters and Rsq. Plots it.
-smooth : function
-    Smooths data using a window with requested size.
+error_value : function
+    Rounds up value and error of a measure.
 
 @author: Vall
 """
 
-import fwp_string as fst
+from collections import namedtuple
 import matplotlib.pyplot as plt
 from math import sqrt
 import numpy as np
 from scipy.optimize import curve_fit
 from scipy.signal import find_peaks
-from collections import namedtuple
-
-#%%
-
-def rms(data):
-    """Takes a list or array and returns RMS value.
-    
-    Parameters
-    ---------
-    data : array or list
-        Data to be analized.
-    
-    Returns
-    -------
-    float
-        RMS value of analized data.
-    
-    """
-    
-    import numpy as np
-    
-    return np.sqrt(np.mean((np.array(data))**2))
-
-#%%
-
-def main_frequency(data, samplerate=44100):
-    """Returns main frequency and its Fourier amplitude.
-    
-    Parameters
-    ----------
-    data : np.array
-        Data inside a 1D array.
-    samplerate : int, float
-        The data's sampling rate.
-    
-    Returns
-    -------
-    samplerate : int, float
-        The data's sampling rate.
-    main_frequency : float
-        The data's main frequency.
-    fourier_peak : float
-        The main frequency's fourier amplitude.
-    """
-    
-    fourier = np.abs(np.fft.rfft(data))
-    fourier_frequencies = np.fft.rfftfreq(len(data), d=1./samplerate)
-    max_frequency = fourier_frequencies[np.argmax(fourier)]
-    fourier_peak = max(fourier)
-    
-    return max_frequency, fourier_peak
 
 #%%
 
@@ -128,6 +87,368 @@ def mean(X, dX=None):
     
     else:
         return (np.mean(X), np.std(X))
+
+#%%
+
+def rms(data):
+    """Takes a list or array and returns RMS value.
+    
+    Parameters
+    ---------
+    data : array or list
+        Data to be analized.
+    
+    Returns
+    -------
+    float
+        RMS value of analized data.
+    
+    """
+    
+    import numpy as np
+    
+    return np.sqrt(np.mean((np.array(data))**2))
+
+#%%
+
+def main_frequency(data, samplerate=44100):
+    """Returns main frequency and its Fourier amplitude.
+    
+    Parameters
+    ----------
+    data : np.array
+        Data inside a 1D array.
+    samplerate : int, float
+        The data's sampling rate.
+    
+    Returns
+    -------
+    samplerate : int, float
+        The data's sampling rate.
+    main_frequency : float
+        The data's main frequency.
+    fourier_peak : float
+        The main frequency's fourier amplitude.
+    """
+    
+    fourier = np.abs(np.fft.rfft(data))
+    fourier_frequencies = np.fft.rfftfreq(len(data), d=1./samplerate)
+    max_frequency = fourier_frequencies[np.argmax(fourier)]
+    fourier_peak = max(fourier)
+    
+    return max_frequency, fourier_peak
+
+#%%
+
+def smooth(X, window_len=11, window='hanning'):
+    """Smooths data using a window with requested size.
+    
+    This method is based on the convolution of a scaled window with the 
+    signal. The signal is prepared by introducing reflected copies of 
+    the signal (with the window size) in both ends so that transient 
+    parts are minimized in the begining and end part of the output 
+    signal.
+    
+    Parameters
+    ----------
+    X : np.array
+        Input signal 
+    window_len : int {1, 3, 5, ...}
+        Dimension of the smoothing window; should be an odd integer
+    window : str {'flat', 'hanning', 'hamming', 'bartlett', 'blackman'}
+        Type of window; i.e. flat window will produce a moving average 
+        smoothing. Could be the window itself if an array instead of a 
+        string.
+
+    Returns
+    -------
+    np.array
+        Smoothed signal
+        
+    Examples
+    --------
+    >>> t = np.linspace(-2,2,0.1)
+    >>> x = np.sin(t) + np.randn(len(t))*0.1
+    >>> y = smooth(x)
+    
+    See Also
+    --------
+    numpy.hanning
+    numpy.hamming
+    numpy.bartlett
+    numpy.blackman
+    numpy.convolve
+    scipy.signal.lfilter
+    
+    Warnings
+    --------
+    Beware! This was taken from: SciPy-CookBook/ipython/SignalSmooth.py
+    
+    length(output) != length(input). To correct this: return 
+    y[(window_len/2-1):-(window_len/2)] instead of just y.
+      
+    """
+
+    if X.ndim != 1:
+        raise ValueError("X should be a 1 dimension array.")
+
+    if X.size < window_len:
+        raise ValueError("X needs to be bigger than window_len.")
+
+    if window_len < 3:
+        return X
+
+    allowed = ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']
+    if not window in allowed:
+        raise ValueError("Window should be on {}".format(allowed))
+
+    S = np.r_[X[window_len-1 : 0 : -1], X, X[-2 : -window_len-1 : -1]]
+
+    if window == 'flat': # moving average
+        W = np.ones(window_len, 'd')
+    else:
+        W = eval('np.' + window + '(window_len)')
+    
+    Y = np.convolve(W/W.sum(), S, mode='valid')
+    
+    return Y
+
+#%%
+
+def single_extreme(X, mode='min'):    
+    """Returns an absolute extreme of a multidimensional array.
+    
+    Parameters
+    ----------
+    X : list, array
+        Multidimensional array-like of numbers.
+    mode : str {'min', 'max'}
+        Indicates which extreme to find (if a minimum or maximum).
+    
+    Returns
+    -------
+    float, int
+        Value of the extreme.
+    
+    """
+    
+    if mode not in ['min', 'max']:
+        raise ValueError("mode must be 'min' or 'max'")
+    
+    if mode == 'min':
+        while True:
+            try:
+                X = list(X)
+                X[0]
+                X = min(X[i] for i in range(len(X)))
+            except:
+                return X
+
+    else:
+        while True:
+            try:
+                X = list(X)
+                X[0]
+                X = max(X[i] for i in range(len(X)))
+            except:
+                return X
+            
+#%% Distance between peaks
+                
+def peak_separation(signal, time=1, *args, **kwargs):
+    '''Calculates mean peak separation.
+    
+    Parameters
+    ----------
+    signal : array-like
+        Signal to evaluates peaks on
+    time : scalar or array-like
+        If scalar, it should indicate time step. If array-like, 
+        should be same lenght as signal and correspond to time 
+        of measurements.
+
+    Other parameters
+    ----------------
+    Parameters passed to scipy.signal.find_peaks.
+        height
+        threshold
+        distance
+        prominence
+        width
+        wlen
+        rel_height
+    
+    Returns
+    -------
+    string : str
+        Written answer.
+    
+    See also: scipy.signal.find_peaks
+    
+    '''
+        
+    peaks = find_peaks(signal, *args, **kwargs)[0]
+    
+    if not peaks: #no peaks found
+        raise ValueError('No peaks found with gien parameters.')
+    
+    if isinstance(time, (list, tuple, np.ndarray)):
+        if not len(signal)==len(time):
+            raise ValueError('Time and signal must be same lenght.')
+            
+        peak_times = time[peaks]
+    else:
+        peak_times = peaks * time
+        
+    return np.mean(peak_times)
+
+#%% PID class
+
+stuff_to_log = ('feedback_value',
+                'new_value',
+                'p_term',
+                'i_term',
+                'd_term')
+
+# Create a named tuple with default value for all fields an empty list
+#PIDlog = namedtuple('PIDLog', stuff_to_log, defaults=[[]]*len(stuff_to_log)) #for Python 3.7 nd up
+PIDlog = namedtuple('PIDLog', stuff_to_log)
+
+class PIDController:
+    """A simple class implementing a PID contoller that keeps a log.
+    
+    Based on https://gist.github.com/hgrecco/16edd24989c63b6fc2eeb829c6d6b7ea
+    
+    Parameters
+    ----------
+    setpoint : int, float
+        Value the PID is suposed to achieve and keep constant.
+    kp : int, float, optional
+        Value of the PID proportional term's constant. Default=1.
+    ki : int, float, optional
+        Value of the PID integral term's constant. Default=0.
+    kd : int, float, optional
+        Value of the PID derivative term's constant. Default=0.
+    dt : int, float, optional
+        Value of the time interval. Default=1.
+    log_data : bool, optional
+        Devides whether to keep a log of every calculation or not. Default=False.
+    
+    Other parameters
+    ----------------
+    max_log_lengh : int, optional
+        Maximum allowed log length. Default 1e7
+    on_log_overflow : str {'del', 'delall', 'write'}, optional
+        Decides action to take when max_log_length is reached. 'del' deletes oldest
+        entry and adds new one (like in a fixed-size buffer), 'delall' resets the
+        log to an empty list, 'write' writes the log to a log.txt file and clears
+        the log. Won't overwrite existing log.txt files.
+    integration_mode : str {'full', 'weighted', 'fixed'}, optional
+        Sets integral term mode. 'full' integrates over all time, i.e. since the PID
+        was last reset. 'weighted' gives a wight to each value that shrinks with each
+        ieration, making older samples less important. 'fixed' integrates inside a 
+        window of fixed length.
+    integration_params : dict, optional
+        Parameters for chosen integration mode.
+    
+    Example
+    -------
+    >>> pid = PIDController(42, 3, 2, 1, log_data=True)
+    >>> while True:
+    >>>     signal = read()
+            actuator = pid.calculate(signal)
+            write(actuator)
+            
+        the_log = pid.log
+        pid.reset()
+        pid.clearlog()
+    """
+    def __init__(self, setpoint, kp=1.0, ki=0.0, kd=0.0, dt=1, 
+                 log_data=False, max_log_length=1e6, on_log_overflow='del',
+                 integration_mode='full', integration_params={}):
+
+        self.setpoint = setpoint
+        self.kp = kp
+        self.ki = ki
+        self.kd = kd
+        self.dt = dt
+        
+        #fresh p, i and d terms
+        self.reset()
+        
+        # start with a fresh log
+        self.log_data = log_data
+        self.clearlog()
+        
+    def __repr__(self):
+        string = 'PIDController with parameters: kp={}, ki={}, kd={}'
+        return string.format(self.kp, self.ki, self.kd)
+
+    def __str__(self):
+        string = 'kp={}, ki={}, kd={}'
+        return string.format(self.kp, self.ki, self.kd)
+    
+    def calculate(self, feedback_value):
+        
+#        self.last_feedback = feedback_value
+        error = self.setpoint - feedback_value
+
+        delta_error = error - self.last_error
+
+        self.p_term = error
+        self.i_term += error * self.dt
+        self.d_term = delta_error / self.dt
+
+        self.last_error = error
+
+        new_value = self.kp * self.p_term
+        new_value += self.ki * self.i_term
+        new_value += self.kd * self.d_term
+        
+        self.last_log = PIDlog._make([feedback_value, new_value,
+                                  self.p_term, self.i_term, self.d_term])
+        
+        # Only log data if I ask it to
+        if self.log_data:
+            self.__log.append(self.last_log)
+
+        return new_value
+
+    def clearlog(self):
+        self.__log = []
+        self.last_log = PIDlog._make([[]]*len(stuff_to_log))
+
+    def reset(self):
+        self.last_error = 0
+        self.p_term = 0
+        self.i_term = 0
+        self.d_term = 0
+#        self.last_feedback = 0
+
+    @property
+    def log(self):
+        #read-only
+        if self.__log:
+            return self.__makelog__()
+        else:
+            raise ValueError('No logged data.')
+
+    @property
+    def log_data(self):
+        return self.__log_data
+    @log_data.setter
+    def log_data(self, value):
+        if not isinstance(value, bool):
+            raise TypeError('log_data must be bool.')
+        self.__log_data = value
+            
+    def __makelog__(self):
+        '''Make a PIDlog nuamedtuple containing the list of each
+        value in each field.'''
+        log = []
+        for i in range(len(self.last_log)):
+            log.append([prop[i] for prop in self.__log])
+        return PIDlog._make(log)
 
 #%%
 
@@ -249,7 +570,7 @@ def linear_fit(X, Y, dY=None, showplot=True,
                 fact = -.08
             vertical = [kwargs['text_position'][1]+fact*i for i in range(3)]
         
-        plt.annotate('m = {}'.format(fst.error_value(
+        plt.annotate('m = {}'.format(error_value(
                         m, 
                         dm,
                         error_digits=kwargs['mb_error_digits'][0],
@@ -259,7 +580,7 @@ def linear_fit(X, Y, dY=None, showplot=True,
                         legend=True)),
                     (kwargs['text_position'][0], vertical[0]),
                     xycoords='axes fraction')
-        plt.annotate('b = {}'.format(fst.error_value(
+        plt.annotate('b = {}'.format(error_value(
                         b, 
                         db,
                         error_digits=kwargs['mb_error_digits'][1],
@@ -416,7 +737,7 @@ def nonlinear_fit(X, Y, fitfunction, initial_guess=None, dY=None,
             plt.annotate(
                     'a{} = {}'.format(
                         i,
-                        fst.error_value(
+                        error_value(
                             parameters[i], 
                             sqrt(covariance[i,i]),
                             error_digits=kwargs['par_error_digits'][i],
@@ -441,123 +762,174 @@ def nonlinear_fit(X, Y, fitfunction, initial_guess=None, dY=None,
 
 #%%
 
-def smooth(X, window_len=11, window='hanning'):
-    """Smooths data using a window with requested size.
+def error_value(X, dX, error_digits=1, units='',
+                string_scale=True, one_point_scale=False, legend=False):
     
-    This method is based on the convolution of a scaled window with the 
-    signal. The signal is prepared by introducing reflected copies of 
-    the signal (with the window size) in both ends so that transient 
-    parts are minimized in the begining and end part of the output 
-    signal.
+    """Rounds up value and error of a measure. Also makes a latex string.
+    
+    This function takes a measure and its error as input. Then, it 
+    rounds up both of them in order to share the same amount of decimal 
+    places.
+    
+    After that, it generates a latex string containing the rounded up 
+    measure. For that, it can rewrite both value and error so that the 
+    classical prefix scale of units can be applied.
     
     Parameters
     ----------
-    X : np.array
-        Input signal 
-    window_len : int {1, 3, 5, ...}
-        Dimension of the smoothing window; should be an odd integer
-    window : str {'flat', 'hanning', 'hamming', 'bartlett', 'blackman'}
-        Type of window; i.e. flat window will produce a moving average 
-        smoothing. Could be the window itself if an array instead of a 
-        string.
-
+    X : float
+        Measurement's value.
+    dX : float
+        Measurement's associated error.
+    error_digits=2 : int, optional.
+        Desired number of error digits.
+    units='' : str, optional.
+        Measurement's units.
+    string_scale=True : bool, optional.
+        Whether to apply the classical prefix scale or not.        
+    one_point_scale=False : bool, optional.
+        Applies prefix with one order less.
+    legend=False : bool, optional.
+        Says whether it is for the legend of a plot or not.
+    
     Returns
     -------
-    np.array
-        Smoothed signal
-        
+    latex_str : str
+        Latex string containing value and error.
+    
     Examples
     --------
-    >>> t = np.linspace(-2,2,0.1)
-    >>> x = np.sin(t) + np.randn(len(t))*0.1
-    >>> y = smooth(x)
+    >> error_value(1.325412, 0.2343413)
+    '(1.33$\\pm$0.23)'
+    >> error_value(1.325412, 0.2343413, error_digits=3)
+    '(1.325$\\pm$0.234)'
+    >> error_value(.133432, .00332, units='V')
+    '\\mbox{(133.4$\\pm$3.3) mV}'
+    >> error_value(.133432, .00332, one_point_scale=True, units='V')
+    '\\mbox{(0.1334$\\pm$0.0033) V}'
+    >> error_value(.133432, .00332, string_scale=False, units='V')
+    '\\mbox{(1.334$\\pm$0.033)$10^-1$ V}'
     
     See Also
     --------
-    numpy.hanning
-    numpy.hamming
-    numpy.bartlett
-    numpy.blackman
-    numpy.convolve
-    scipy.signal.lfilter
+    copy
     
-    Warnings
-    --------
-    Beware! This was taken from: SciPy-CookBook/ipython/SignalSmooth.py
-    
-    length(output) != length(input). To correct this: return 
-    y[(window_len/2-1):-(window_len/2)] instead of just y.
-      
     """
-
-    if X.ndim != 1:
-        raise ValueError("X should be a 1 dimension array.")
-
-    if X.size < window_len:
-        raise ValueError("X needs to be bigger than window_len.")
-
-    if window_len < 3:
-        return X
-
-    allowed = ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']
-    if not window in allowed:
-        raise ValueError("Window should be on {}".format(allowed))
-
-    S = np.r_[X[window_len-1 : 0 : -1], X, X[-2 : -window_len-1 : -1]]
-
-    if window == 'flat': # moving average
-        W = np.ones(window_len, 'd')
+    
+    # First, I string-format the error to scientific notation with a 
+    # certain number of digits
+    if error_digits >= 1:
+        aux = '{:.' + str(error_digits) + 'E}'
     else:
-        W = eval('np.' + window + '(window_len)')
+        print("Unvalid 'number_of_digits'! Changed to 1 digit")
+        aux = '{:.0E}'
+    error = aux.format(dX)
+    error = error.split("E") # full error (string)
     
-    Y = np.convolve(W/W.sum(), S, mode='valid')
+    error_order = int(error[1]) # error's order (int)
+    error_value = error[0] # error's value (string)
+
+    # Now I string-format the measure to scientific notation
+    measure = '{:E}'.format(X)
+    measure = measure.split("E") # full measure (string)
+    measure_order = int(measure[1]) # measure's order (int)
+    measure_value = float(measure[0]) # measure's value (string)
     
-    return Y
+    # Second, I choose the scale I will put both measure and error on
+    # If I want to use the string scale...
+    if -12 <= measure_order < 12 and string_scale:
+        prefix = ['p', 'n', r'$\mu$', 'm', '', 'k', 'M', 'G']
+        scale = [-12, -9, -6, -3, 0, 3, 6, 9, 12]
+        for i in range(8):
+            if not one_point_scale:
+                if scale[i] <= measure_order < scale[i+1]:
+                    prefix = prefix[i] # prefix to the unit
+                    scale = scale[i] # order of both measure and error
+                    break
+            else:
+                if scale[i]-1 <= measure_order < scale[i+1]-1:
+                    prefix = prefix [i]
+                    scale = scale[i]
+                    break
+        used_string_scale = True
+    # ...else, if I don't or can't...
+    else:
+        scale = measure_order
+        prefix = ''
+        used_string_scale = False
+    
+    # Third, I actually scale measure and error according to 'scale'
+    # If error_order is smaller than scale...
+    if error_order < scale:
+        if error_digits - error_order + scale - 1 >= 0:
+            aux = '{:.' + str(error_digits - error_order + scale - 1)
+            aux = aux + 'f}'
+            error_value = aux.format(
+                    float(error_value) * 10**(error_order - scale))
+            measure_value = aux.format(
+                    measure_value * 10**(measure_order - scale))
+        else:
+            error_value = float(error_value) * 10**(error_order - scale)
+            measure_value = float(measure_value)
+            measure_value = measure_value * 10**(measure_order - scale)
+    # Else, if error_order is equal or bigger than scale...
+    else:
+        aux = '{:.' + str(error_digits - 1) + 'f}'
+        error_value = aux.format(
+                float(error_value) * 10**(error_order - scale))
+        measure_value = aux.format(
+                float(measure_value) * 10**(measure_order - scale))
+    
+    # Forth, I make a latex string. Ex.: '(1.34$pm$0.32) kV'
+    latex_str = r'({}$\pm${})'.format(measure_value, error_value)
+    if not used_string_scale and measure_order != 0:
+        latex_str = latex_str + r'$10^{:.0f}$'.format(scale)      
+    elif used_string_scale:
+        latex_str = latex_str + ' ' + prefix
+    if units != '':
+        if latex_str[-1] == ' ':
+            latex_str = latex_str + units
+        else:
+            latex_str = latex_str + ' ' + units
+    if units != '' or prefix:
+        if not legend:
+            latex_str = r'\mbox{' + latex_str + '}'
+                       
+    return latex_str
 
 #%%
 
-def find(L, L0):
-    """Takes an array of data and searches the index(es) of value L0.
+def multimeter_error(value, porcentual_error, extra_digits, resolution):
+    """Returns absolute error of a multimeter's measurement.
     
     Parameters
     ----------
-    L : list, np.array
-        Array where I search
-    L0 : int, float
-        Value I search
+    value : int, float
+        Measurement's value on certain units.
+    porcentual_error : int, float, {0 < porcentual_error < 100}
+        Measurement scale's porcentual error, as stated at 
+        multimeter's manual; i.e.: '(0.5% + 3d)' at 200 Ohm scale
+        with resolution .1 Ohm means 'porcentual_error=0.5'.
+    extra_digits : int
+        Measurement scale's added digits, as stated at 
+        multimeter's manual; i.e. '(0.5% + 3d)' at 200 Ohm scale
+        with resolution .1 Ohm means 'extra_digits=3'.
+    resolution : int, float
+        Measurement scale's resolution on value's units; i.e. 
+        '(0.5% + 3d)' at 200 Ohm scale with resolution .1 Ohm
+        means 'resolution=0.1' if I want the error of 143.7 Ohm
+        and I want to run 'multimeter_error(value=143.7)'.
     
     Returns
     -------
-    ind : list
-        Indexes of L that match L0.
-    
-    Raises
-    ------
-    "L must be a list or similar" : TypeError
-        If L is not of an allowed type.
-    
+    error : int, float
+        Measurement's absolute error.
     """
-
-    if not isinstance(L, list):
-        try:
-            L = list(L)
-        except TypeError:
-            L = [].append(L)
-        else:
-            return TypeError("L must be a list or similar")
-            
-    ind = []
-    N = -1
-    while N < len(L):
-        val = L[N+1 : len(L)]
-        try:
-            # Write the index on L and not on val
-            N = val.index(L0) + len(L) - len(val)
-        except ValueError:
-            break
-        ind.append(N)
         
-    return ind
+    error = porcentual_error * value / 100
+    error = error + extra_digits * resolution
+    
+    return error
 
 #%%
 
@@ -619,251 +991,3 @@ def compare_error_value(X1, dX1, X2, dX2):
         string = string + "con intersección absoluta de incertezas"
         
     return string
-
-#%%
-
-def single_extreme(X, mode='min'):    
-    """Returns an absolute extreme of a multidimensional array.
-    
-    Parameters
-    ----------
-    X : list, array
-        Multidimensional array-like of numbers.
-    mode : str {'min', 'max'}
-        Indicates which extreme to find (if a minimum or maximum).
-    
-    Returns
-    -------
-    float, int
-        Value of the extreme.
-    
-    """
-    
-    if mode not in ['min', 'max']:
-        raise ValueError("mode must be 'min' or 'max'")
-    
-    if mode == 'min':
-        while True:
-            try:
-                X = list(X)
-                X[0]
-                X = min(X[i] for i in range(len(X)))
-            except:
-                return X
-
-    else:
-        while True:
-            try:
-                X = list(X)
-                X[0]
-                X = max(X[i] for i in range(len(X)))
-            except:
-                return X
-            
-#%% Distance between peaks
-                
-def peak_separation(signal, time=1, *args, **kwargs):
-    '''Calculates mean peak separation.
-    
-    Parameters
-    ----------
-    signal : array-like
-        Signal to evaluates peaks on
-    time : scalar or array-like
-        If scalar, it should indicate time step. If array-like, 
-        should be same lenght as signal and correspond to time 
-        of measurements.
-
-    Other parameters
-    ----------------
-    Parameters passed to scipy.signal.find_peaks.
-        height
-        threshold
-        distance
-        prominence
-        width
-        wlen
-        rel_height
-    
-    Returns
-    -------
-    string : str
-        Written answer.
-    
-    See also: scipy.signal.find_peaks
-    
-    '''
-        
-    peaks = find_peaks(signal, *args, **kwargs)[0]
-    
-    if isinstance(time, (list, tuple, np.ndarray)):
-        if not len(signal)==len(time):
-            raise ValueError('Time and signal must be same lenght.')
-            
-        peak_times = time[peaks]
-    else:
-        peak_times = peaks * time
-        
-    return np.mean(peak_times)
-
-#%% PID class
-
-
-stuff_to_log = ('feedback_value',
-                'new_value',
-                'p_term',
-                'i_term',
-                'd_term')
-
-# Create a named tuple with default value for all fields an empty list
-#PIDlog = namedtuple('PIDLog', stuff_to_log, defaults=[[]]*len(stuff_to_log)) #for Python 3.7 nd up
-PIDlog = namedtuple('PIDLog', stuff_to_log)
-
-class PIDController:
-    """A simple class implementing a PID contoller that keeps a log.
-    
-    Based on https://gist.github.com/hgrecco/16edd24989c63b6fc2eeb829c6d6b7ea
-    
-    Parameters
-    ----------
-    setpoint : int, float
-        Value the PID is suposed to achieve and keep constant.
-    kp : int, float, optional
-        Value of the PID proportional term's constant. Default=1.
-    ki : int, float, optional
-        Value of the PID integral term's constant. Default=0.
-    kd : int, float, optional
-        Value of the PID derivative term's constant. Default=0.
-    dt : int, float, optional
-        Value of the time interval. Default=1.
-    log_data : bool, optional
-        Devides whether to keep a log of every calculation or not. Default=False.
-    
-    Other parameters
-    ----------------
-    max_log_lengh : int, optional
-        Maximum allowed log length. Default 1e7
-    on_log_overflow : str {'del', 'delall', 'write'}, optional
-        Decides action to take when max_log_length is reached. 'del' deletes oldest
-        entry and adds new one (like in a fixed-size buffer), 'delall' resets the
-        log to an empty list, 'write' writes the log to a log.txt file and clears
-        the log. Won't overwrite existing log.txt files.
-    integration_mode : str {'full', 'weighted', 'fixed'}, optional
-        Sets integral term mode. 'full' integrates over all time, i.e. since the PID
-        was last reset. 'weighted' gives a wight to each value that shrinks with each
-        ieration, making older samples less important. 'fixed' integrates inside a 
-        window of fixed length.
-    integration_params : dict, optional
-        Parameters for chosen integration mode.
-    
-    Example
-    -------
-    >>> pid = PIDController(42, 3, 2, 1, log_data=True)
-    >>> while True:
-    >>>     signal = read()
-            actuator = pid.calculate(signal)
-            write(actuator)
-            
-        the_log = pid.log
-        pid.reset()
-        pid.clearlog()
-    """
-    def __init__(self, setpoint, kp=1.0, ki=0.0, kd=0.0, dt=1, 
-                 log_data=False, max_log_length=1e6, on_log_overflow='del',
-                 integration_mode='full', integration_params={}):
-
-        self.setpoint = setpoint
-        self.kp = kp
-        self.ki = ki
-        self.kd = kd
-        self.dt = dt
-        
-        #fresh p, i and d terms
-        self.reset()
-        
-        # start with a fresh log
-        self.log_data = log_data
-        self.clearlog()
-        
-    def __repr__(self):
-        string = 'PIDController with parameters: kp={}, ki={}, kd={}'
-        return string.format(self.kp, self.ki, self.kd)
-
-    def __str__(self):
-        string = 'kp={}, ki={}, kd={}'
-        return string.format(self.kp, self.ki, self.kd)
-    
-    def calculate(self, feedback_value):
-        
-        error = self.setpoint - feedback_value
-
-        delta_error = error - self.last_error
-
-        self.p_term = error
-        self.i_term += error * self.dt
-        self.d_term = delta_error / self.dt
-
-        self.last_error = error
-
-        new_value = self.kp * self.p_term
-        new_value += self.ki * self.i_term
-        new_value += self.kd * self.d_term
-        
-        # Only log data if I ask it to
-        if self.log_data:
-            self.last_log = PIDlog._make([feedback_value, new_value,
-                                          self.p_term, self.i_term, self.d_term])
-            self.__log.append(self.last_log)
-
-        return new_value
-
-    def clearlog(self):
-        self.__log = []
-        self.last_log = PIDlog._make([[]]*len(stuff_to_log))
-
-    def reset(self):
-        self.last_error = 0
-        self.p_term = 0
-        self.i_term = 0
-        self.d_term = 0
-
-    @property
-    def log(self):
-        #read-only
-        if self.__log:
-            return self.__makelog__()
-        else:
-            raise ValueError('No logged data.')
-
-    @property
-    def log_data(self):
-        return self.__log_data
-    @log_data.setter
-    def log_data(self, value):
-        if not isinstance(value, bool):
-            raise TypeError('log_data must be bool.')
-        self.__log_data = value
-            
-    def __makelog__(self):
-        '''Make a PIDlog nuamedtuple containing the list of each
-        value in each field.'''
-        log = []
-        for i in range(len(self.last_log)):
-            log.append([prop[i] for prop in self.__log])
-        return PIDlog._make(log)
-    
-#%%
-        
-def clip_between(value, lower=0, upper=100):
-    '''Clips value to the (lower, upper) interval, i.e. if value
-    is less than lower, it return lower, if its grater than upper,
-    it return upper, else, it returns value unchanged.'''
-    value = max(lower, value)
-    value = min(upper, value)
-    return value
-
-def append_data_to_string(*args):
-    out = ''
-    for value in args:
-        out += '\t' + str(value)
-    return out + '\n'

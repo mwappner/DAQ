@@ -482,7 +482,7 @@ class PWMOutputChannel:
                             duty_cycle = self.duty_cycle,
                             )
                 else:
-                    self.__task.end()
+                    self.__task.stop()
             else:
                 self.__print__("Should 'start' or 'stop'")
             self.__status = key
