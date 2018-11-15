@@ -115,12 +115,12 @@ task.add_channels(fch.AnalogInputChannel, *ai_pins)
 task.channels.configuration = ai_conf
 
 # Make a measurement
-signal = task.read(nsamples_total=10000, 
+signal = task.read(nsamples=10000, 
                    samplerate=None) # None means maximum SR
 """Beware!
 An daqError will be raised if not all the DAQ's acquired samples can be 
 passed to the PC on time.
-2 channels => nsamples_total = 29500 can be done but not 30000.
+2 channels => nsamples = 29500 can be done but not 30000.
 """
 
 # End communication
@@ -151,7 +151,7 @@ task.add_channels(fch.AnalogInputChannel, *ai_pins)
 task.channels.configuration = ai_conf
 
 # Make a continuous measurement
-signal = task.read(nsamples_total=None, # None means continuous
+signal = task.read(nsamples=None, # None means continuous
                    samplerate=50e3, # None means maximum SR
                    nsamples_each=500)
 
@@ -196,7 +196,7 @@ task.add_pwm_outputs(pwm_pin)
 
 # Measure
 task.outputs.write(status=True) # Output on
-signal = task.inputs.read(nsamples_total=nsamples,
+signal = task.inputs.read(nsamples=nsamples,
                           samplerate=samplerate,
                           nsamples_each=nsamples_each)
 task.outputs.write(status=False) # Output off
@@ -273,7 +273,7 @@ task.register_every_n_samples_acquired_into_buffer_event(
 
 
 # Make a continuous measurement
-signal = task.read(nsamples_total=None, # None means continuous
+signal = task.read(nsamples=None, # None means continuous
                    samplerate=50e3, # None means maximum SR
                    nsamples_each=500)
 
@@ -333,7 +333,7 @@ def callback(read_data):
 
 # Measure
 task.outputs.write() # Output on
-signal = task.inputs.read(nsamples_total=nsamples,
+signal = task.inputs.read(nsamples=nsamples,
                           samplerate=samplerate,
                           nsamples_each=nsamples_each,
                           callback=callback,
@@ -352,7 +352,7 @@ plt.ylabel('Data (V)')
 add_style()
 plt.plot(time, signal, '.')
 
-"""Don't forget to also try this with nsamples_total=None!"""
+"""Don't forget to also try this with nsamples=None!"""
 
 #%% Control_Loop
 
@@ -412,7 +412,7 @@ def callback(read_data):
   
 # Measure
 task.outputs.status = True
-signal = task.inputs.read(nsamples_total=None,
+signal = task.inputs.read(nsamples=None,
                           nsamples_each=500,
                           samplerate=samplingrate,
                           nsamples_callback=nsamples_callback,
