@@ -11,7 +11,7 @@ import fwp_save as sav
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-#import fwp_string as fstr
+import fwp_string as fstr
 from scipy.signal import find_peaks
 
 class Struct:
@@ -20,6 +20,7 @@ class Struct:
     
     def __repr__(self):
         return str(vars(self))
+    
 #%% Samplerate_Sweep (by Val)
 """This script analyses a samplerate sweep for a fixed signal.
 
@@ -188,18 +189,39 @@ folder = os.path.join(os.getcwd(),
 fourierfiles = sorted([os.path.join(
         folder,f) for f in os.listdir(folder) if f.endswith('Fourier.txt')])
     
-f = fourierfiles[10]
+f = fourierfiles[20]
+samplingrate = fstr.find_1st_number(f)*1.012
 actual_freq, fourier_freq, fourier_power = np.loadtxt(f, unpack=True)
 #plt.stem(actual_freq, np.ones_like(actual_freq))
 #plt.stem(fourier_freq, fourier_power)
 
-plt.plot(actual_freq, fourier_freq,'-o')
-plt.plot(actual_freq, actual_freq)
-plt.xlabel('Actual frequency [Hz]')
-plt.ylabel('Fourier calculated frequency [Hz]')
-plt.legend(('Datos', 'Pendiente 1'))
-plt.ylim((0, max(fourier_freq) * 1.1))
-plt.title(os.path.basename(f))
+#expected curve:
+fr = np.arange(actual_freq[0], actual_freq[-1], 100)
+fa = np.array([np.abs(fr - n*samplingrate) for n in range(10)])
+fa = np.min(fa, axis=0)
+
+yrange = (0, max(fourier_freq) * 1.1)#plotting range
+
+plt.plot(fr, fa, label='Alias de frecuencias esperado', linewidth=2)
+plt.plot(actual_freq, fourier_freq,'o', label='Frecuencia entrante reconstruida')
+
+plt.plot([samplingrate/2]*2, yrange, 'k:', label='Media frecuencia de muestreo', linewidth=2)
+plt.plot([samplingrate]*2, yrange, 'k--', label='Frecuencia de muestreo', linewidth=2)
+
+plt.xlabel('Frecuencia entrante real [Hz]', fontsize=13)
+plt.ylabel('Frecuencia entrante calculada [Hz]', fontsize=13)
+plt.legend(loc='upper right', fontsize=13)
+plt.ylim(yrange)
+plt.title('Frecuencia real vs. frecuencia medida', fontsize=15)
+
+plt.tight_layout()
+plt.ticklabel_format(axis='both', style='sci', useMathText=True, scilimits=(0,0))
+plt.tick_params(labelsize=12)
+
+plt.grid()
+
+fig = plt.gcf()
+#fig.savefig('Aliasing.pdf', bbox_inches='tight')
 
 #%% Por picos:
 rawfiles = sorted([os.path.join(
@@ -335,30 +357,82 @@ plt.ylabel('coltage')
 plt.grid()
 plt.show()
 
+#%%
+
+def slicer(vecor, interval):
+    return vector[interval[0]:interval[1]]
+
 #%% prueba 2
 
-name = 'Interchannel_Time'
+name = 'Interchannel_Time_1000Hz'
 folder = os.path.join(os.getcwd(),
                       'Measurements',
                       name)
-interchanneltime=[[],[],[],[],[]]
 #I've got 5 files with multiple channel adquisition. I want to see how interchannel value changes.
-for i in range(5):
-    interchannelfile = os.path.join(folder,'NChannels_{}.txt'.format(i+2)) #I choose the corresponding file
+
+interval = [(0, 57000), (8000, 94000), (0, 25000)]
+
+slicer = lambda vector, interval: vector[interval[0]:interval[1]]
+
+interchanneltime = []
+stds2 = []
+
+for i in range(3):
+    
+    interchannelfile = os.path.join(folder,'NChannels_{}_signal_10Hz.txt'.format(i+2)) #I choose the corresponding file
     datos= np.loadtxt(interchannelfile, unpack=True) # I load the file data
     time=datos[0,:]#first set of values are time
     voltage = [datos[d, :] for d in range(1, datos.shape[0])] #the rest are the voltages for each channel
-    deltavector=np.zeros_like(voltage)# I create an array to store values of voltage differences
+   
+    deltavector=[]# I create an array to store values of voltage differences
     interchannelvoltage=np.zeros(len(voltage))#i create array to store mean voltage difference
-    for j in range(len(voltage)): #for each column, that is to say for each channel
-        if j < len(voltage)-1: #if not the las channel
-            deltavector[j,:]=voltage[j+1]-voltage[j]
-        else: #if last channel
-            deltavector[j,:]=voltage[j]-voltage[0]
-        interchannelvoltage[j]=np.mean(deltavector[j,:])#mean voltage difference between channels
-    interchanneltime[i]=interchannelvoltage/(2*10)#I store the values outside loop
+    stds = np.zeros(len(voltage))
     
+    for j in range(len(voltage)): #for each column, that is to say for each channel
+        
+        if j>0: #not the first channel
+            delta = voltage[j] - voltage[j-1]
+        else:
+            delta = voltage[j][1:] - voltage[j-1][:-1] #voltage -1 is the last one
+        
+        delta = slicer(delta, interval[i])
+        deltavector.append(delta[delta>0])
+        
+        interchannelvoltage[j]=np.mean(deltavector[j])#mean voltage difference between channels
+        stds[j] = np.std(deltavector[j])/(4*1000)
+        
+    interchanneltime.append(interchannelvoltage/(4*1000)) #I store the values outside loop
+    stds2.append(stds)
 
+#%%
+inter = (100, 250)
+markers = 'ox*d'
+for k, (v, m) in enumerate(zip(voltage, markers)): 
+#    plt.plot(slicer(time, inter) + k*interchanneltime[2][0], slicer(v, inter),'o-', label= str(1+k))
+    plt.plot(time, v, m, label='Canal {}'.format(k))
+
+plt.xlabel('Tiempo [s]', fontsize=13)
+plt.ylabel('Señal medida [V]', fontsize=13)
+plt.legend(loc='lower right', fontsize=13)
+plt.ylim((-0.5256367686896762, -0.30963712678037525))
+plt.xlim((0.4752038196803503, 0.4752461027850231))
+#plt.title('Frecuencia real vs. frecuencia medida', fontsize=15)
+
+plt.grid()
+
+fig = plt.gcf()
+fig.set_size_inches([6.4 , 2.92])
+
+plt.tight_layout()
+plt.ticklabel_format(axis='both', style='sci', useMathText=True, scilimits=(0,0))
+plt.tick_params(labelsize=12)
+
+fig.savefig('multiplex.pdf', bbox_inches='tight')
+
+
+for k in interchanneltime:
+    stri = '{:.3e}\t'*len(k)
+    print(stri.format(*k))
 
 #%% 
 name = 'Settling_Time'
