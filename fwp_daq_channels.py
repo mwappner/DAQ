@@ -131,12 +131,12 @@ class AnalogInputChannel:
         
         # Check if I need to reconfigure
         try:
-            condition = self.__configuration == mode
+            needs_reconfiguration = self.__configuration != mode
         except:
-            condition = False
-        
+            needs_reconfiguration = True
+            
         # Reconfigure if needed
-        if not condition:
+        if needs_reconfiguration:
             if not self.test_mode:
                 self.__channel.ai_term_cfg = mode
             else:
@@ -151,23 +151,20 @@ class AnalogInputChannel:
     def input_range(self, voltage_range):
         
         voltage_range = list(voltage_range)
+        if len(voltage_range) != 2:
+            raise AttributeError("Range must have length 2")
         
         # Check if I need to reconfigure
         try:
-            condition = self.__range == voltage_range
+            needs_reconfiguration = self.__range != voltage_range
         except:
-            condition = False
-        
+            needs_reconfiguration = True
+            
         # Reconfigure if needed
-        if not condition:
-            try:
-                if self.__range[0] != voltage_range[0]:
-                    self.input_min = voltage_range[0]
-                if self.__range[1] != voltage_range[1]:
-                    self.input_max = voltage_range[1]
-            except AttributeError:
-                self.__range = voltage_range
+        if needs_reconfiguration:
             self.__range = voltage_range
+            self.input_min = voltage_range[0]
+            self.input_max = voltage_range[1]
     
     @property
     def input_min(self):
@@ -178,18 +175,18 @@ class AnalogInputChannel:
         
         # Check if I need to reconfigure
         try:
-            condition = self.__input_min == voltage
+            needs_reconfiguration = self.__input_min != voltage
         except:
-            condition = False
-        
+            needs_reconfiguration = True
+            
         # Reconfigure if needed
-        if not condition:
+        if needs_reconfiguration:
             if not self.test_mode:
                 self.__channel.ai_min = voltage
             else:
                 self.__print__("Should 'ai_min'")
             self.__input_min = voltage
-            self.__range[0] = voltage
+            self.__range = (voltage, self.__range[1])
                 
     @property
     def input_max(self):
@@ -200,18 +197,18 @@ class AnalogInputChannel:
 
         # Check if I need to reconfigure
         try:
-            condition = self.__input_max == voltage
+            needs_reconfiguration = self.__input_max != voltage
         except:
-            condition = False
-        
+            needs_reconfiguration = True
+            
         # Reconfigure if needed
-        if not condition:
-            if self.test_mode:
+        if needs_reconfiguration:
+            if not self.test_mode:
                 self.__channel.ai_max = voltage
             else:
                 self.__print__("Should 'ai_max'")
             self.__input_max = voltage
-            self.__range[1] = voltage
+            self.__range = (self.__range[0], voltage)
     
     @property
     def gnd_pin(self):   
@@ -423,12 +420,12 @@ class PWMOutputChannel:
         
         # Check if I need to reconfigure
         try:
-            condition = self.__duty_cycle == value
+            needs_reconfiguration = self.__duty_cycle != value
         except:
-            condition = False
-        
+            needs_reconfiguration = True
+            
         # Reconfigure if needed
-        if not condition:
+        if needs_reconfiguration:
             if not self.test_mode:
                 self.__channel.co_pulse_duty_cyc = value
             else:
@@ -446,12 +443,12 @@ class PWMOutputChannel:
         
         # Check if I need to reconfigure
         try:
-            condition = self.__frequency == value
+            needs_reconfiguration = self.__frequency != value
         except:
-            condition = False
-        
+            needs_reconfiguration = True
+            
         # Reconfigure if needed
-        if not condition:
+        if needs_reconfiguration:
             if not self.test_mode:
                 self.__channel.co_pulse_freq = value
             else:
@@ -469,12 +466,12 @@ class PWMOutputChannel:
         
         # Check if I need to reconfigure
         try:
-            condition = self.__status == key
+            needs_reconfiguration = self.__status != key
         except:
-            condition = False
- 
-        # Reconfigure if needed               
-        if not condition:
+            needs_reconfiguration = True
+            
+        # Reconfigure if needed
+        if needs_reconfiguration:
             if isinstance(key, str):
                 key = True
             if not self.test_mode:
@@ -485,7 +482,7 @@ class PWMOutputChannel:
                             duty_cycle = self.duty_cycle,
                             )
                 else:
-                    self.__task.end()
+                    self.__task.stop()
             else:
                 self.__print__("Should 'start' or 'stop'")
             self.__status = key
