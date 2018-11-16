@@ -28,8 +28,8 @@ import fwp_string as fst
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-import pyaudio
-import wave
+#import pyaudio
+#import wave
 
 #%%
 
@@ -254,79 +254,79 @@ def savetxt(file, datanumpylike, overwrite=False, header='', footer=''):
     return
 
 #%%
-
-def savewav(file,
-            datapyaudio,
-            data_nchannels=1,
-            data_format=pyaudio.paFloat32,
-            data_samplerate=44100,
-            overwrite=False):
-    
-    """Takes a PyAudio byte stream and saves it on a '.wav' file.
-    
-    Takes a PyAudio byte stream and saves it on a '.wav' file. It 
-    specifies some parameters: 'datanchannels' (number of audio 
-    channels), 'dataformat' (format of the audio data), and 'samplerate' 
-    (sampling rate of the data). If 'overwrite=False', it checks whether 
-    'file' exists or not; if it already exists, it defines a new file in 
-    order to not allow overwritting. If overwrite=True, it saves the 
-    plot on 'file' even if it already exists.
-    
-    Variables
-    ---------
-    file : str
-        Desired file (must include full path and extension)
-    datapyaudio : str
-        PyAudio byte stream.
-    data_nchannels=1 : int
-        Data's number of audio channels.
-    data_format : int
-        Data's PyAudio format.
-    overwrite=False : bool
-        Indicates wheter to overwrite or not.
-        
-    Returns
-    -------
-    nothing
-    
-    Yields
-    ------
-    '.wav' file
-    
-    See Also
-    --------
-    free_file()
-    
-    """
-    
-    base = os.path.split(file)[0]
-    if not os.path.isdir(base):
-        os.makedirs(base)
-
-    file = os.path.join(
-            base,
-            (os.path.splitext(os.path.basename(file))[0] + '.wav'),
-            )
-    
-    if not overwrite:
-        file = free_file(file)
-    
-    datalist = []
-    datalist.append(datapyaudio)
-    
-    p = pyaudio.PyAudio()
-    wf = wave.open(file, 'wb')
-    
-    wf.setnchannels(data_nchannels)
-    wf.setsampwidth(p.get_sample_size(data_format))
-    wf.setframerate(data_samplerate)
-    wf.writeframes(b''.join(datalist))
-    
-    wf.close()
-    
-    print('Archivo guardado en {}'.format(file))
-    
-    return
+#
+#def savewav(file,
+#            datapyaudio,
+#            data_nchannels=1,
+#            data_format=pyaudio.paFloat32,
+#            data_samplerate=44100,
+#            overwrite=False):
+#    
+#    """Takes a PyAudio byte stream and saves it on a '.wav' file.
+#    
+#    Takes a PyAudio byte stream and saves it on a '.wav' file. It 
+#    specifies some parameters: 'datanchannels' (number of audio 
+#    channels), 'dataformat' (format of the audio data), and 'samplerate' 
+#    (sampling rate of the data). If 'overwrite=False', it checks whether 
+#    'file' exists or not; if it already exists, it defines a new file in 
+#    order to not allow overwritting. If overwrite=True, it saves the 
+#    plot on 'file' even if it already exists.
+#    
+#    Variables
+#    ---------
+#    file : str
+#        Desired file (must include full path and extension)
+#    datapyaudio : str
+#        PyAudio byte stream.
+#    data_nchannels=1 : int
+#        Data's number of audio channels.
+#    data_format : int
+#        Data's PyAudio format.
+#    overwrite=False : bool
+#        Indicates wheter to overwrite or not.
+#        
+#    Returns
+#    -------
+#    nothing
+#    
+#    Yields
+#    ------
+#    '.wav' file
+#    
+#    See Also
+#    --------
+#    free_file()
+#    
+#    """
+#    
+#    base = os.path.split(file)[0]
+#    if not os.path.isdir(base):
+#        os.makedirs(base)
+#
+#    file = os.path.join(
+#            base,
+#            (os.path.splitext(os.path.basename(file))[0] + '.wav'),
+#            )
+#    
+#    if not overwrite:
+#        file = free_file(file)
+#    
+#    datalist = []
+#    datalist.append(datapyaudio)
+#    
+#    p = pyaudio.PyAudio()
+#    wf = wave.open(file, 'wb')
+#    
+#    wf.setnchannels(data_nchannels)
+#    wf.setsampwidth(p.get_sample_size(data_format))
+#    wf.setframerate(data_samplerate)
+#    wf.writeframes(b''.join(datalist))
+#    
+#    wf.close()
+#    
+#    print('Archivo guardado en {}'.format(file))
+#    
+#    return
 
 #%%
 
