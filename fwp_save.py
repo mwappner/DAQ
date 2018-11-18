@@ -11,6 +11,8 @@ new_dir : function
     Makes and returns a new related directory to avoid overwriting.
 free_file : function
     Returns a name for a new file to avoid overwriting.
+new_name : function
+    Returns a unique name with input name as template.
 saveplot : function
     Saves a matplotlib.pyplot plot on an image file (i.e: 'png').
 savetxt : function
@@ -125,6 +127,34 @@ def free_file(my_file, newformat='{}_{}'):
             free_file = os.path.join(base, free_file+extension)
     
     return free_file
+
+#%%
+    
+def new_name(name, newseparator='_'):
+    '''Returns a name of a unique file or directory so as to not overwrite.
+    If propsed name existed, will return name + newseparator + number.
+     
+    Parameters:
+    -----------
+        name : str (path)
+            proposed file or directory name influding file extension
+        nweseparator : str
+            separator between original name and index that gives unique name
+            
+    Returns:
+    --------
+        name : str
+            unique namefile using input 'name' as template
+    '''
+    
+    #if file is a directory, extension will be empty
+    base, extension = os.path.splitext(name)
+    i = 2
+    while os.path.exists(name):
+        name = base + newseparator + str(i) + extension
+        i += 1
+        
+    return name
 
 #%%
 
