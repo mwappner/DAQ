@@ -5,7 +5,8 @@ Created on Thu Nov 15 13:25:14 2018
 @author: Marcos
 """
 
-from collections import deque
+from collections import deque, namedtuple
+from fwp_save import new_name
 
 #%%
 class InOut(deque):
@@ -16,17 +17,104 @@ class InOut(deque):
         return out
     
 #a += b - f.put(b)
-#%% PID class
+        
+#%%
 
-stuff_to_log = ('feedback_value',
+stuff_to_log_list = ('feedback_value',
                 'new_value',
                 'p_term',
                 'i_term',
                 'd_term')
-
+       
 # Create a named tuple with default value for all fields an empty list
 #PIDlog = namedtuple('PIDLog', stuff_to_log, defaults=[[]]*len(stuff_to_log)) #for Python 3.7 nd up
-PIDlog = namedtuple('PIDLog', stuff_to_log)
+PIDlog = namedtuple('PIDLog', stuff_to_log_list)
+
+class Logger:
+    
+    def __init__(self, log_data, maxlen=10000, write=False, file='log.txt',
+                 log_format='{:.3e}\t', log_time=False):
+       
+        #initialize stuff
+        self.file = file
+        self._log = deque(maxlen=maxlen)
+        self.maxlen = maxlen
+        self.log_format = log_format
+        
+        #boolean values
+        self.log_data = log_data
+        self.write = write
+        self.log_time = log_time
+
+    @property
+    def file(self):
+        return self._file
+    @file.setter
+    def file(self, value):
+        self._file = new_name(value)
+        #States whether file is initialized with header        
+        self.file_initialized = False
+        
+    @property
+    def maxlen(self):
+        return self._maxlen
+    @maxlen.setter
+    def maxlen(self, value):
+        self._maxlen = value #redefine _log to new length
+        self._log = deque(self._log, maxlen=value)
+        
+    @property
+    def log_data(self):
+        return self._log_data
+    @log_data.setter
+    def log_data(self, value):
+        if not isinstance(value, bool):
+            raise TypeError('log_data must be bool.')
+        self._log_data = value
+
+    @property
+    def write(self):
+        return self._write
+    @write.setter
+    def write(self, value):
+        if not isinstance(value, bool):
+            raise TypeError('write must be bool.')
+            
+        self._write = value
+        if self.write and not self.file_initialized:
+            # Initialize file with categories as header
+            s = '#' + '{}\t' * len(stuff_to_log_list) + '\n'
+            with open(self.file, 'a') as f:
+                f.write(s.format(*stuff_to_log_list))
+            
+            self.file_inicialized = True
+        
+    @property
+    def log_format(self):
+        return self._log_format
+    @log_format.setter
+    def log_format(self, value):
+        if not isinstance(value, str):
+            raise TypeError("log_format should be string with format '{:4e} '.")
+        self._log_format = value
+        self._log_format_complete = value * len(stuff_to_log_list) + '\n'
+        
+    def log(self, stuff_to_log):
+        '''Logs given data using log_format. Input stuff_to_log should
+        match stuff_to_log_list.'''
+        
+        #if data should be logged
+        if self.log_data:
+            self._log.append(stuff_to_log)
+            
+        #if data should be writren
+        if self.write:
+            s = self._log_format_complete.format(*stuff_to_log)
+            with open(self.file, 'a') as f:
+                f.write(s)
+    
+        
+#%% PID class
 
 class PIDController:
     """A simple class implementing a PID contoller that keeps a log.
@@ -122,14 +210,12 @@ class PIDController:
         self.last_log = PIDlog._make([feedback_value, new_value,
                                   self.p_term, self.i_term, self.d_term])
         
-        # Only log data if I ask it to
-        if self.log_data:
-            self.__log.append(self.last_log)
+        self.logger.log(self.last_log)
 
         return new_value
 
     def clearlog(self):
-        self.__log = []
+        self.logger.log = deque(maxlen=10000)
         self.last_log = PIDlog._make([[]]*len(stuff_to_log))
 
     def reset(self):
@@ -142,24 +228,16 @@ class PIDController:
     @property
     def log(self):
         #read-only
-        if self.__log:
+        if self._log:
             return self.__makelog__()
         else:
             raise ValueError('No logged data.')
 
-    @property
-    def log_data(self):
-        return self.__log_data
-    @log_data.setter
-    def log_data(self, value):
-        if not isinstance(value, bool):
-            raise TypeError('log_data must be bool.')
-        self.__log_data = value
             
     def __makelog__(self):
         '''Make a PIDlog nuamedtuple containing the list of each
         value in each field.'''
         log = []
-        for i in range(len(self.last_log)):
-            log.append([prop[i] for prop in self.__log])
+        for i in range(len(stuff_to_log)):
+            log.append([prop[i] for prop in self.logger._log])
         return PIDlog._make(log)
