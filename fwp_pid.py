@@ -10,13 +10,95 @@ from fwp_save import new_name
 
 #%%
 class InOut(deque):
+    '''Subclass of collections.deque with one added method to provide
+    kind of FIFO-like behaviour.
     
+    Methods:
+    --------
+    
+    put(vaue):
+        Appends a value on the right and returns value on the left.'''
+        
+    def __init__(self, size, iterable=[]):
+        self.size = size
+        super().__init__(iterable, maxlen=int(size))
+        
     def put(self, val):
-        out = self.pop()
-        self.appendleft(val)
+        out = self.popleft()
+        self.append(val)
         return out
     
+    @property
+    def size(self):
+        return self._size #read-only
 #a += b - f.put(b)
+        
+#%% Itegrator classes
+
+class InfiniteIntegrator:
+    
+    def __init__(self, dt, integral_so_far=0):
+        self.dt = dt
+        self.reset(integral_so_far)
+        
+    def integrate(self, value):
+        self.integral += value * self.dt
+        return self.integral
+        
+    def reset(self, integral_so_far=0):
+        self.integral = integral_so_far
+
+
+class WindowIntegrator:
+    
+    def __init__(self, dt, window_length=1000, integral_so_far=0):
+        self.dt = dt
+        self._window_length = window_length
+        self.reset(integral_so_far)
+        
+    def integrate(self, value):
+        self.integral += value * self.dt - self.window.put(value)
+        return self.integral
+        
+    def reset(self, integral_so_far=0):
+        self.integral = integral_so_far
+        self.window = InOut(size=self.window_length, iterator=[0])
+    
+    @property
+    def window_length(self):
+        return self._window_length
+    @window_length.setter
+    def window_length(self, value):
+        self._window_length = value
+        self.window = InOut(size=self.window_length, iterator=self.window)
+        self.integral = sum(self.window)
+        
+class WeightedIntegrator:
+    
+    def __init__(self, dt, alpha, interal_so_far=0):
+        self.dt = dt
+        self.alpha = alpha
+        self.reset(interal_so_far)
+        
+    def integrate(self, value):
+        self.integral *= self.alpha
+        self.integral += value
+        self.integral /= 1+self.alpha
+        
+    def reset(self, integral_so_far=0):
+        self.integral = integral_so_far
+
+integral_types = {
+        'infinite': InfiniteIntegrator,
+        'windowed': WindowIntegrator,
+        'weighted': WeightedIntegrator,        
+        }    
+    
+def integral_switcher(integral_type):
+    if integral_type not in integral_types.keys():
+        s = 'integral type should be one of {}'
+        raise ValueError(s.format(list(integral_types.keys())))
+    return integral_types[integral_type]
         
 #%%
 
@@ -166,8 +248,7 @@ class PIDController:
         pid.clearlog()
     """
     def __init__(self, setpoint, kp=1.0, ki=0.0, kd=0.0, dt=1, 
-                 log_data=False, max_log_length=1e6, on_log_overflow='del',
-                 integration_mode='full', integration_params={}):
+                 log_data=False, integrator='windowed'):
 
         self.setpoint = setpoint
         self.kp = kp
