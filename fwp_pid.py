@@ -20,7 +20,6 @@ class InOut(deque):
         Appends a value on the right and returns value on the left.'''
         
     def __init__(self, size, iterable=[]):
-        self.size = size
         super().__init__(iterable, maxlen=int(size))
         
     def put(self, val):
@@ -30,7 +29,7 @@ class InOut(deque):
     
     @property
     def size(self):
-        return self._size #read-only
+        return self.maxlen #read-only
 #a += b - f.put(b)
         
 #%% Itegrator classes
@@ -153,8 +152,8 @@ class Logger:
         return self._maxlen
     @maxlen.setter
     def maxlen(self, value):
-        self._maxlen = value #redefine _log to new length
-        self._log = deque(self._log, maxlen=value)
+        self._maxlen = value #redefine log to new length
+        self.log = deque(self.log, maxlen=value)
         
     @property
     def log_data(self):
@@ -199,23 +198,23 @@ class Logger:
     def log_time(self, value):
         raise Exception('log_time not yet implemented')
         
-    def log(self, stuff_to_log):
+    def input_log(self, stuff_to_log):
         '''Logs given data using log_format. Input stuff_to_log should
         match stuff_to_log_list.'''
         
         #if data should be logged
         if self.log_data:
-            self._log.append(stuff_to_log)
+            self.log.append(stuff_to_log)
             
         #if data should be writren
         if self.write:
             s = self._log_format_complete.format(*stuff_to_log)
             with open(self.file, 'a') as f:
                 f.write(s)
-    
+
     def clearlog(self):
         self.file = self._original_file
-        self._log = deque(maxlen=self.maxlen)
+        self.log = deque(maxlen=self.maxlen)
 
     
         
@@ -298,7 +297,7 @@ class PIDController:
         delta_error = error - self.last_error
 
         self.p_term = error
-        self.logger.integrate(error) #i_term
+        self.integrator.integrate(error) #i_term
         self.d_term = delta_error / self.dt
 
         self.last_error = error
@@ -310,7 +309,7 @@ class PIDController:
         self.last_log = PIDlog._make([feedback_value, new_value,
                                   self.p_term, self.i_term, self.d_term])
         
-        self.logger.log(self.last_log) #only if needed
+        self.logger.input_log(self.last_log) #only if needed
 
         return new_value
 
@@ -335,7 +334,7 @@ class PIDController:
     @property
     def log(self):
         #read-only
-        if self._log:
+        if self.logger.log: #if it has logged data
             return self.__makelog__()
         else:
             raise ValueError('No logged data.')
@@ -345,7 +344,7 @@ class PIDController:
         value in each field.'''
         log = []
         for i in range(len(stuff_to_log_list)):
-            log.append([prop[i] for prop in self.logger._log])
+            log.append([prop[i] for prop in self.logger.log])
         return PIDlog._make(log)
 
     #logger stuff
