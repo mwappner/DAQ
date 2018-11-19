@@ -40,7 +40,7 @@ class InfiniteIntegrator:
         self.dt = dt
         self.reset(integral_so_far)
 
-    def __repr__(self):
+    def __str__(self):
         return 'infinite'
         
     def integrate(self, value):
@@ -58,7 +58,7 @@ class WindowIntegrator:
         self._window_length = window_length
         self.reset(integral_so_far)
         
-    def __repr__(self):
+    def __str__(self):
         return 'windowed'
     
     def integrate(self, value):
@@ -85,13 +85,13 @@ class WeightedIntegrator:
         self.alpha = alpha
         self.reset(interal_so_far)
         
-    def __repr__(self):
+    def __str__(self):
         return 'weighted'
     
     def integrate(self, value):
         self.integral *= self.alpha
         self.integral += value
-        self.integral /= 1+self.alpha
+        self.integral /= 1 + self.alpha
         return self.integral
         
     def reset(self, integral_so_far=0):
@@ -254,7 +254,8 @@ class PIDController:
     
     Example
     -------
-    >>> pid = PIDController(42, 3, 2, 1, log_data=True)
+    >>> pid = PIDController(42, 3, 2, 1, log_data=True, integrator='weighted')
+    >>> pid.set_integrator(alpha=1.2)
     >>> while True:
     >>>     signal = read()
             actuator = pid.calculate(signal)
@@ -386,18 +387,22 @@ class PIDController:
         elif hasattr(value, 'integrate'): 
             self._integrator = value #integrator instance
         else:
-            s = ('Integrator should be strig stating integrator ',
-                  'type or integrator class instance.')
+            s = ('Integrator should be a strig stating integrator ',
+                  'type or an integrator class instance.')
             raise ValueError(''.join(s))
         
     @property
     def integrator_type(self):
         return str(self._integrator)
     @integrator_type.setter
+    def integrator_type(self, value):
+        self.integrator = value
                 
     def set_integrator(self, **props):
         '''Sets integrator properties given in props to given value.
-        Each integratin mode has different properties.'''
+        Each integratin mode has different properties. It does not
+        set integrator type. For that, see integratoy_type and
+        integrator.'''
         for propname, propval in props.items():
             setattr(self.integrator, propname, propval)
             
