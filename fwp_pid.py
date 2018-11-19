@@ -40,6 +40,9 @@ class InfiniteIntegrator:
     def __init__(self, dt, integral_so_far=0):
         self.dt = dt
         self.reset(integral_so_far)
+
+    def __repr__(self):
+        return 'infinite'
         
     def integrate(self, value):
         self.integral += value * self.dt
@@ -56,13 +59,16 @@ class WindowIntegrator:
         self._window_length = window_length
         self.reset(integral_so_far)
         
+    def __repr__(self):
+        return 'windowed'
+    
     def integrate(self, value):
         self.integral += value * self.dt - self.window.put(value)
         return self.integral
         
     def reset(self, integral_so_far=0):
         self.integral = integral_so_far
-        self.window = InOut(size=self.window_length, iterator=[0])
+        self.window = InOut(size=self.window_length, iterable=[0])
     
     @property
     def window_length(self):
@@ -70,20 +76,24 @@ class WindowIntegrator:
     @window_length.setter
     def window_length(self, value):
         self._window_length = value
-        self.window = InOut(size=self.window_length, iterator=self.window)
+        self.window = InOut(size=self.window_length, iterable=self.window)
         self.integral = sum(self.window)
         
 class WeightedIntegrator:
     
-    def __init__(self, dt, alpha, interal_so_far=0):
+    def __init__(self, dt, alpha=5, interal_so_far=0):
         self.dt = dt
         self.alpha = alpha
         self.reset(interal_so_far)
         
+    def __repr__(self):
+        return 'weighted'
+    
     def integrate(self, value):
         self.integral *= self.alpha
         self.integral += value
         self.integral /= 1+self.alpha
+        return self.integral
         
     def reset(self, integral_so_far=0):
         self.integral = integral_so_far
@@ -118,15 +128,15 @@ class Logger:
                  log_format='{:.3e}\t', log_time=False):
        
         #initialize stuff
-        self.file = file
-        self._log = deque(maxlen=maxlen)
-        self.maxlen = maxlen
+        self._original_file = file
+        self._maxlen = maxlen
         self.log_format = log_format
+        self.clearlog()
         
         #boolean values
         self.log_data = log_data
         self.write = write
-        self.log_time = log_time
+#        self.log_time = log_time 
 
     @property
     def file(self):
@@ -134,6 +144,7 @@ class Logger:
     @file.setter
     def file(self, value):
         self._file = new_name(value)
+        self._original_file = value
         #States whether file is initialized with header        
         self.file_initialized = False
         
@@ -181,6 +192,13 @@ class Logger:
         self._log_format = value
         self._log_format_complete = value * len(stuff_to_log_list) + '\n'
         
+    @property
+    def log_time(self):
+        return self._log_time
+    @log_time.setter
+    def log_time(self, value):
+        raise Exception('log_time not yet implemented')
+        
     def log(self, stuff_to_log):
         '''Logs given data using log_format. Input stuff_to_log should
         match stuff_to_log_list.'''
@@ -194,6 +212,11 @@ class Logger:
             s = self._log_format_complete.format(*stuff_to_log)
             with open(self.file, 'a') as f:
                 f.write(s)
+    
+    def clearlog(self):
+        self.file = self._original_file
+        self._log = deque(maxlen=self.maxlen)
+
     
         
 #%% PID class
@@ -215,25 +238,20 @@ class PIDController:
         Value of the PID derivative term's constant. Default=0.
     dt : int, float, optional
         Value of the time interval. Default=1.
-    log_data : bool, optional
-        Devides whether to keep a log of every calculation or not. Default=False.
     
     Other parameters
     ----------------
-    max_log_lengh : int, optional
-        Maximum allowed log length. Default 1e7
-    on_log_overflow : str {'del', 'delall', 'write'}, optional
-        Decides action to take when max_log_length is reached. 'del' deletes oldest
-        entry and adds new one (like in a fixed-size buffer), 'delall' resets the
-        log to an empty list, 'write' writes the log to a log.txt file and clears
-        the log. Won't overwrite existing log.txt files.
-    integration_mode : str {'full', 'weighted', 'fixed'}, optional
-        Sets integral term mode. 'full' integrates over all time, i.e. since the PID
-        was last reset. 'weighted' gives a wight to each value that shrinks with each
-        ieration, making older samples less important. 'fixed' integrates inside a 
-        window of fixed length.
-    integration_params : dict, optional
-        Parameters for chosen integration mode.
+    log_data : bool, optional
+        Decides whether to keep a log of every calculation or not. 
+        Initializes PIDController.logger with a Logger inscantce. User
+        can later declare more specific logger properties through set_logger
+        or by directly modifying PIDController.logger attribute. Default=False.
+    integrator : string {'infinite', 'windowed', 'weighted'}, optional
+        Selects integration mode. Initializes PIDController.integrator with 
+        one of the Integrator classes inscantce. User can later declare more 
+        specific logger properties through set_integrator or by directly 
+        modifying PIDController.integrator attribute. Default=False.
+
     
     Example
     -------
@@ -250,17 +268,18 @@ class PIDController:
     def __init__(self, setpoint, kp=1.0, ki=0.0, kd=0.0, dt=1, 
                  log_data=False, integrator='windowed'):
 
+        #pid parameters
         self.setpoint = setpoint
         self.kp = kp
         self.ki = ki
         self.kd = kd
-        self.dt = dt
+
+        #integrator and logger class instances
+        self.integrator = self.create_integrator(integrator, dt)
+        self.logger = log_data
         
-        #fresh p, i and d terms
+        #fresh p, i and d terms, and clear log
         self.reset()
-        
-        # start with a fresh log
-        self.log_data = log_data
         self.clearlog()
         
     def __repr__(self):
@@ -272,14 +291,14 @@ class PIDController:
         return string.format(self.kp, self.ki, self.kd)
     
     def calculate(self, feedback_value):
-        
+        '''Calculates the PID next step.'''
 #        self.last_feedback = feedback_value
         error = self.setpoint - feedback_value
 
         delta_error = error - self.last_error
 
         self.p_term = error
-        self.i_term += error * self.dt
+        self.logger.integrate(error) #i_term
         self.d_term = delta_error / self.dt
 
         self.last_error = error
@@ -291,21 +310,28 @@ class PIDController:
         self.last_log = PIDlog._make([feedback_value, new_value,
                                   self.p_term, self.i_term, self.d_term])
         
-        self.logger.log(self.last_log)
+        self.logger.log(self.last_log) #only if needed
 
         return new_value
 
     def clearlog(self):
-        self.logger.log = deque(maxlen=10000)
-        self.last_log = PIDlog._make([[]]*len(stuff_to_log))
+        '''Clear PID log.'''
+        self.logger.clearlog()
+        self.last_log = PIDlog._make([[]]*len(stuff_to_log_list))
 
     def reset(self):
+        '''Reset stored PID values, not parameters or log.'''
         self.last_error = 0
         self.p_term = 0
-        self.i_term = 0
         self.d_term = 0
+        self.integrator.reset()
 #        self.last_feedback = 0
 
+    @property
+    def i_term(self):
+        return self.integrator.integral
+
+    #log stuff
     @property
     def log(self):
         #read-only
@@ -313,12 +339,78 @@ class PIDController:
             return self.__makelog__()
         else:
             raise ValueError('No logged data.')
-
             
     def __makelog__(self):
         '''Make a PIDlog nuamedtuple containing the list of each
         value in each field.'''
         log = []
-        for i in range(len(stuff_to_log)):
+        for i in range(len(stuff_to_log_list)):
             log.append([prop[i] for prop in self.logger._log])
         return PIDlog._make(log)
+
+    #logger stuff
+    @property
+    def logger(self):
+        return self._logger
+    @logger.setter
+    def logger(self, value):
+        if isinstance(value, bool):
+            self._logger = Logger(value)
+        elif hasattr(value, 'calculate'): 
+            self._logger = value
+        else: 
+            s = ('Logger should be a boolean reperesenting whether',
+                 ' to log data or not, or a Logger class instance.')
+            raise ValueError(''.join(s))
+        
+    def set_logger(self, **props):
+        for propname, propval in props.items():
+            setattr(self.logger, propname, propval)
+            
+    @property
+    def log_data(self):
+        return self.logger.log_data
+    @log_data.setter
+    def log_data(self, value):
+        self.logger.log_data = value
+        
+    #integrator stuff
+    @property
+    def integrator(self):
+        return self._integrator
+    @integrator.setter
+    def integrator(self, value):
+        #if it's a string staiting integrator type
+        if isinstance(value, str):
+            self._integrator = self.create_integrator(value, self.dt) 
+        #if it's an integrator class instance
+        elif hasattr(value, 'integrate'): 
+            self._integrator = value #integrator instance
+        else:
+            s = ('Integrator should be strig stating integrator ',
+                  'type or integrator class instance.')
+            raise ValueError(''.join(s))
+        
+    @property
+    def integrator_type(self):
+        return str(self._integrator)
+    @integrator_type.setter
+                
+    def set_integrator(self, **props):
+        '''Sets integrator properties given in props to given value.
+        Each integratin mode has different properties.'''
+        for propname, propval in props.items():
+            setattr(self.integrator, propname, propval)
+            
+    @property
+    def dt(self):
+        return self.integrator.dt
+    @dt.setter
+    def dt(self, value):
+        value = float(value)
+        self.integrator.dt = value
+        
+    def create_integrator(self, integrator_str, dt):
+        intcls = integral_switcher(integrator_str)
+        return intcls(dt)
+            
