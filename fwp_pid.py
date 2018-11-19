@@ -1,6 +1,23 @@
 # -*- coding: utf-8 -*-
 """
-Created on Thu Nov 15 13:25:14 2018
+This module includes a number of classes and helper functions to implement 
+a PID controller with logging capabilities and including three different
+integration methods. Can be extendable.
+
+The main class of this module is PIDController which uses the secondary 
+classes Logger and one of the Integrator classes, depending on the integration
+mode selected: InfiniteIntegrator, WindowedIntegrator and WeightedIntegrator.
+The function Integral_switcher selects the appropiate class.
+
+The helper class InOut is an implementation of a FIFO type buffer subclassing 
+collections.deque, used by other secondary classes. The helper function 
+set_props is used by set_integrator and set_logger, methods of PIDController.
+The helper class PIDLog is a collections.NamedTuple whis fields given by 
+stuff_to_log.
+
+All Integrator classes have methods integrate(value) and reset() that calculate 
+the integral for the next step and resets the instance's attributes, 
+respectively.
 
 @author: Marcos
 """
@@ -30,7 +47,10 @@ class InOut(deque):
     @property
     def size(self):
         return self.maxlen #read-only
-#a += b - f.put(b)
+    
+def set_props(obj, **props):
+    for propname, propval in props.items():
+        setattr(obj, propname, propval)
         
 #%% Itegrator classes
 
@@ -104,24 +124,67 @@ integral_types = {
         }    
     
 def integral_switcher(integral_type):
-    if integral_type not in integral_types.keys():
-        s = 'integral type should be one of {}'
+    if not isinstance(integral_type, str):
+        s = 'Integral type should be of class str, not {}.'
+        raise TypeError(s.format(type(integral_type)))
+    
+    if integral_type.lower() not in integral_types.keys():
+        s = 'Integral type should be one of {}'
         raise ValueError(s.format(list(integral_types.keys())))
-    return integral_types[integral_type]
+    return integral_types[integral_type.lower()]
         
 #%%
 
+#when modifying this, modify PIDController.calculate accordingly
 stuff_to_log_list = ('feedback_value',
-                'new_value',
-                'p_term',
-                'i_term',
-                'd_term')
+                     'new_value',
+                     'p_term',
+                     'i_term',
+                     'd_term')
        
 # Create a named tuple with default value for all fields an empty list
 #PIDlog = namedtuple('PIDLog', stuff_to_log, defaults=[[]]*len(stuff_to_log)) #for Python 3.7 nd up
 PIDlog = namedtuple('PIDLog', stuff_to_log_list)
 
 class Logger:
+    """A class implementing some logging capabilites both to memory, through
+    the Logger.log attribute, and to disk by writing to logger.file. 
+    
+    Parameters
+    ----------
+    log_data : bool
+        Decides if data should be logged to memory in Logger.log
+    maxlen : int, float, optional
+        Decides if data should be logged to disk in Logger.file
+    write : bool, optional
+        Value of the PID integral term's constant. Default=False.
+    file : str,  optional
+        File to which data should be logged if write=True. Default='log.txt'.
+    
+    Other parameters
+    ----------------
+    log_format : str, optional
+        Decides format the logged data should have when writing to file. By
+        default, it uses exponential notation with four significant digits.
+        Default: '{:.3e}\t'.
+    log_time : bool, optional
+        Decides if Logger should write time of log to file. Not implemented. 
+        Default: False.
+
+    Methods
+    -------
+    input_log(stuff_to_log)
+        calculates next step of the PID with internal parameters and state 
+        using the feedback_value
+    clearlog()
+        clears instance log and creates a new log file
+    
+    Attributes
+    ----------
+    Other than the given in parameters:
+    log : collections.deque
+        Contains logged data to a maximum length of Logger.maxlen
+    """
     
     def __init__(self, log_data, maxlen=10000, write=False, file='log.txt',
                  log_format='{:.3e}\t', log_time=False):
@@ -142,17 +205,18 @@ class Logger:
         return self._file
     @file.setter
     def file(self, value):
+        # Get unique file name
         self._file = new_name(value)
         self._original_file = value
-        #States whether file is initialized with header        
+        # States whether file is initialized with header        
         self.file_initialized = False
         
     @property
     def maxlen(self):
-        return self._maxlen
+        return self.log.maxlen
     @maxlen.setter
     def maxlen(self, value):
-        self._maxlen = value #redefine log to new length
+        # Redefine log to new length
         self.log = deque(self.log, maxlen=value)
         
     @property
@@ -173,6 +237,7 @@ class Logger:
             raise TypeError('write must be bool.')
             
         self._write = value
+        # If write is True and file is not initialized, do it
         if self.write and not self.file_initialized:
             # Initialize file with categories as header
             s = '#' + '{}\t' * len(stuff_to_log_list) + '\n'
@@ -213,6 +278,7 @@ class Logger:
                 f.write(s)
 
     def clearlog(self):
+        '''Creates new unique file and resets log.'''
         self.file = self._original_file
         self.log = deque(maxlen=self.maxlen)
 
@@ -251,20 +317,58 @@ class PIDController:
         specific logger properties through set_integrator or by directly 
         modifying PIDController.integrator attribute. Default=False.
 
+    Methods
+    -------
+    calculate(feedback_value)
+        calculates next step of the PID with internal parameters and state
+        using the feedback_value
+    reset()
+        resets PID internal parameters (i.e. integral, derivative and 
+        proportional terms, last computed error and so on)
+    clearlog()
+        clears instance log, last log and creates a new log file
+    set_logger(**props)
+        sets logger attributes and properties
+    set_integrator(**props)
+        sets integrator attributes and properties    
+    
+    Attributes
+    ----------
+    p_term : float
+        last recorded proportional term without proportional constant kp
+    i_term : float
+        last recorded proportional term without proportional constant kp
+    d_term : float
+        last recorded proportional term without proportional constant kp
+    last_log : PIDLog
+        last recorded log containing all properties as described in 
+        fwp_pid.stuff_to_log
+    log : PIDLog
+        complete log since las reset   
+    logger : Logger class instance
+        Logger class instance to 
+    integrator : Integrator class instance
+        Instance of one of the integrator classes: WeightedIntegrator, 
+        WindowedIntegrator or InfiniteIntegrator.
+    integrator_type : str
+        Type of integrator indicating which Integrator class instance is
+        being used.
     
     Example
     -------
     >>> pid = PIDController(42, 3, 2, 1, log_data=True, integrator='weighted')
     >>> pid.set_integrator(alpha=1.2)
+    >>> pid.set_logger(write=True, file='Measurements/PIDlogs/log.txt')
     >>> while True:
     >>>     signal = read()
             actuator = pid.calculate(signal)
             write(actuator)
             
-        the_log = pid.log
-        pid.reset()
-        pid.clearlog()
+    >>> the_log = pid.log
+    >>> pid.reset()
+    >>> pid.clearlog()
     """
+    
     def __init__(self, setpoint, kp=1.0, ki=0.0, kd=0.0, dt=1, 
                  log_data=False, integrator='windowed'):
 
@@ -275,7 +379,7 @@ class PIDController:
         self.kd = kd
 
         #integrator and logger class instances
-        self.integrator = self.create_integrator(integrator, dt)
+        self.integrator = self.__create_integrator__(integrator, dt)
         self.logger = log_data
         
         #fresh p, i and d terms, and clear log
@@ -291,7 +395,7 @@ class PIDController:
         return string.format(self.kp, self.ki, self.kd)
     
     def calculate(self, feedback_value):
-        '''Calculates the PID next step.'''
+        '''Calculates the next step of the PID with given feedback value.'''
 #        self.last_feedback = feedback_value
         error = self.setpoint - feedback_value
 
@@ -364,8 +468,8 @@ class PIDController:
             raise ValueError(''.join(s))
         
     def set_logger(self, **props):
-        for propname, propval in props.items():
-            setattr(self.logger, propname, propval)
+        '''Sets logger properties given in props to given value.'''
+        set_props(self.logger, **props)
             
     @property
     def log_data(self):
@@ -382,7 +486,7 @@ class PIDController:
     def integrator(self, value):
         #if it's a string staiting integrator type
         if isinstance(value, str):
-            self._integrator = self.create_integrator(value, self.dt) 
+            self._integrator = self.__create_integrator__(value, self.dt) 
         #if it's an integrator class instance
         elif hasattr(value, 'integrate'): 
             self._integrator = value #integrator instance
@@ -403,8 +507,7 @@ class PIDController:
         Each integratin mode has different properties. It does not
         set integrator type. For that, see integratoy_type and
         integrator.'''
-        for propname, propval in props.items():
-            setattr(self.integrator, propname, propval)
+        set_props(self.integrator, **props)
             
     @property
     def dt(self):
@@ -414,7 +517,7 @@ class PIDController:
         value = float(value)
         self.integrator.dt = value
         
-    def create_integrator(self, integrator_str, dt):
+    def __create_integrator__(self, integrator_str, dt):
         intcls = integral_switcher(integrator_str)
         return intcls(dt)
             
