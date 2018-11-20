@@ -365,7 +365,7 @@ class Gen:
     >> gen = Gen(port='USB0::0x0699::0x0363::C108013::INSTR')
     >> gen.output(True, 1, waveform='sin', frequency=1e3)
     {turns on channel 1 with a 1kHz sinusoidal wave}
-    >> gen.output(True, 1, waveform='squ')
+    >> gen.output(waveform='squ')
     {keeps channel 1 on but modifies waveform to a square wave}
     >> gen.output(False)
     {turns off channel 1}
@@ -407,7 +407,7 @@ class Gen:
         self.gen = gen
         self.config_output = self.get_config_output()
     
-    def output(self, status, channel=1, 
+    def output(self, status=True, channel=1, 
                print_changes=False, **output_config):
         
         """Turns on/off an output channel. Also configures it if needed.
@@ -428,9 +428,18 @@ class Gen:
             Output's amplitude in Vpp (if none, current configuration).
         offset : int, float, optional
             Output's offset in V (if none, current configuration).
-        phase : int, flot, optional
+        phase : int, float, optional
             Output's phase expressed in radians and multiples of pi 
             (if none, applies current configuration).
+        duty_cycle : float, optional {0 < duty_cycle < 100}
+            Output's duty cycle expressed as a porcentage (if none, 
+            applies current configuration). Beware! Can only be applied 
+            to square or pulse waveform (100 would mean all high).
+        symmetry : float, optional {0 <= symmetry <= 100}
+            Output's symmetry expressed as a porcentage (if none, 
+            applies current configuration). Beware! Can only be applied 
+            to triangle or sawtooth waveform (100 means only negative 
+            slope).
         
         Returns
         -------
@@ -445,11 +454,11 @@ class Gen:
         {turns off channel 1}
         >> gen.output(1)
         {turns on channel 1 with the same wave as before}
-        >> gen.output(True, waveform='squ75')
+        >> gen.output(True, waveform='squ', duty_cycle=75)
         {turns on channel 1 with asymmetric square 1kHz and 1Vpp wave}
-        >> gen.output(True, waveform='ram50')
+        >> gen.output(True, waveform='tri')
         {turns on channel 1 with triangular 1kHz and 1Vpp wave}
-        >> gen.output(True, waveform='ram0')
+        >> gen.output(True, waveform='ram', symmetry=0)
         {turns on channel 1 with positive ramp}
         
         See Also
@@ -464,7 +473,8 @@ class Gen:
             channel = 1
         
         # This is a list of possibles kwargs
-        keys = ['waveform', 'frequency', 'amplitude', 'offset', 'phase']
+        keys = ['waveform', 'frequency', 'amplitude', 'offset', 'phase',
+                'duty_cycle', 'symmetry']
         
         # I assign 'None' to empty kwargs
         for key in keys:
@@ -481,6 +491,8 @@ class Gen:
                               amplitude=output_config['amplitude'],
                               offset=output_config['offset'],
                               phase=output_config['phase'],
+                              duty_cycle=output_config['duty_cycle'],
+                              symmetry=output_config['symmetry'],
                               print_changes=print_changes)
         
         self.gen.write('OUTP{}:STAT {}'.format(channel, int(status)))
@@ -508,12 +520,12 @@ class Gen:
             i.e.: {1:{
                       'Status': True,
                       'Waveform': 'SIN',
-                      'RAMP Symmetry': 50.0,
-                      'PULS Duty Cycle': 50.0,
                       'Frequency': 1000.0,
                       'Amplitude': 1.0,
                       'Offset': 0.0,
-                      'Phase': 0.0}}
+                      'Phase': 0.0,
+                      'Symmetry': 50.0,
+                      'Duty Cycle': 50.0,}}
 
         """
         
@@ -528,24 +540,7 @@ class Gen:
             # Waveform configuration
             configuration[channel].update({'Waveform': 
                 self.gen.query('SOUR{}:FUNC:SHAP?'.format(channel))})
-            
-            # Special configuration for RAMP
-            if configuration[channel]['Waveform'] == 'RAMP':
-                aux = self.gen.query('SOUR{}:FUNC:RAMP:SYMM?'.format(
-                        channel)) # NOT SURE I SHOULD USE IF
-                configuration[channel]['RAMP Symmetry'] = find_1st_number(aux)
-            else:
-                configuration[channel]['RAMP Symmetry'] =  50.0
-            
-            # Special configuration for SQU
-            if configuration[channel]['Waveform'] == 'PULS':
-                aux = self.gen.query('SOUR{}:PULS:DCYC?'.format(
-                        channel))
-                configuration.update({'PULS Duty Cycle':
-                             find_1st_number(aux)})
-            else:
-                configuration[channel]['PULS Duty Cycle'] = 50.0
-            
+                       
             # Frequency configuration
             aux = self.gen.query('SOUR{}:FREQ?'.format(channel))
             configuration[channel]['Frequency'] = find_1st_number(
@@ -565,12 +560,29 @@ class Gen:
             # Phase configuration
             aux = self.gen.query('SOUR{}:PHAS?'.format(channel))
             configuration[channel]['Phase'] = find_1st_number(aux)
+
+            # PULS's Duty Cycle configuration
+            try:
+                aux = self.gen.query('SOUR{}:PULS:DCYC?'.format(
+                        channel))
+                configuration.update({'Duty Cycle':
+                             find_1st_number(aux)})
+            except:
+                configuration[channel]['Duty Cycle'] = 50.0
+
+            # RAMP's Symmetry configuration
+            try:
+                aux = self.gen.query('SOUR{}:FUNC:RAMP:SYMM?'.format(
+                        channel))
+                configuration[channel]['Symmetry'] = find_1st_number(aux)
+            except:
+                configuration[channel]['Symmetry'] =  50.0
         
         return configuration
     
     def re_config_output(self, channel=1, waveform='sin', frequency=1e3, 
-                         amplitude=1, offset=0, phase=0, 
-                         print_changes=False):
+                         amplitude=1, offset=0, phase=0, duty_cycle=50,
+                         symmetry=50, print_changes=False):
 
         """Reconfigures an output channel, if needed.
                 
@@ -588,6 +600,14 @@ class Gen:
             Output's offset in V.
         phase=0 : int, flot, optional
             Output's phase in multiples of pi.
+        duty_cycle=50 : float, optional {0 < duty_cycle < 100}
+            Output's duty cycle expressed as a porcentage (100 would 
+            mean all high). Beware! Can only be applied to square or 
+            pulse waveform .
+        symmetry=50 : float, optional {0 <= symmetry <= 100}
+            Output's symmetry expressed as a porcentage (100 means only 
+            positive slope). Beware! Can only be applied to triangle or 
+            sawtooth waveform.
         print_changes=False: bool, optional.
             Says whether to print changes or not if output reconfigured.
         
@@ -618,68 +638,33 @@ class Gen:
 
         # This is the algorithm to recognize the waveform
         if waveform is not None:
-            aux = 0
             waveform = waveform.lower()
-            if 'sq' in waveform:
-                try:
-                    aux = find_1st_number(waveform)
-                    if aux != 50:
-                        aux = 'PULS'
-                    else:
-                        aux = 'SQU'
-                except TypeError:
-                    aux = 'SQU'
-            elif 'c' in waveform:
-                aux = 'SINC'
+            if 'c' in waveform:
+                waveform = 'SINC'
             else:
                 for key, value in dic.items():
                     if key in waveform:
-                        aux = value
-                if aux not in dic.values():
-                    aux = 'SIN'
+                        waveform = value
+                if waveform not in dic.values():
+                    waveform = 'SIN'
                     print("Unrecognized Waveform ('SIN' as default).")    
         else:
             waveform = self.config_output[channel]['Waveform']
-            aux = waveform
         
-        if self.config_output[channel]['Waveform'] != aux:
-            self.gen.write('SOUR{}:FUNC:SHAP {}'.format(channel, aux))
+        if self.config_output[channel]['Waveform'] != waveform:
+            self.gen.write('SOUR{}:FUNC:SHAP {}'.format(channel, 
+                                                        waveform))
+            self.config_output[channel]['Waveform'] = waveform
             if print_changes:
                 print("CH{}'s Waveform changed to '{}'".format(
                         channel, 
-                        aux))
-
-        if 'sq' in waveform or 'pul' in waveform:
-            try:
-                aux = find_1st_number(waveform)
-            except TypeError:
-                aux = 50.0
-                print("Unasigned PULS Duty Cycle (default '50.0')")
-            if self.config_output[channel]['PULS Duty Cycle'] != aux:
-                self.gen.write('SOUR{}:PULS:DCYC {:.1f}'.format(
-                        channel,
-                        aux))
-                if print_changes:
-                    print("CH{}'s PULS Duty Cycle changed to \
-                          {}%".format(channel, aux))
-
-        elif 'ram' in waveform:
-            try:
-                aux = find_1st_number(waveform)
-            except TypeError:
-                aux = 50.0
-                print("Unasigned RAMP Symmetry (default '50.0')")
-            if self.config_output[channel]['RAMP Symmetry'] != aux:
-                self.gen.write('SOUR{}:FUNC:RAMP:SYMM {:.1f}'.format(
-                        channel,
-                        aux))
-                if print_changes:
-                    print("CH{}'s RAMP Symmetry changed to \
-                          {}%".format(channel, aux))
+                        waveform))
         
         if frequency is not None:
             if self.config_output[channel]['Frequency'] != frequency:
-                self.gen.write('SOUR{}:FREQ {}'.format(channel, frequency))
+                self.gen.write('SOUR{}:FREQ {}'.format(channel, 
+                                                       frequency))
+                self.config_output[channel]['Frequency'] = frequency
                 if print_changes:
                     print("CH{}'s Frequency changed to {} Hz".format(
                             channel,
@@ -690,6 +675,7 @@ class Gen:
                 self.gen.write('SOUR{}:VOLT:LEV:IMM:AMPL {}'.format(
                     channel,
                     amplitude))
+                self.config_output[channel]['Amplitude'] = amplitude
                 if print_changes:
                     print("CH{}'s Amplitude changed to {} V".format(
                             channel,
@@ -700,6 +686,7 @@ class Gen:
                 self.gen.write('SOUR{}:VOLT:LEV:IMM:OFFS {}'.format(
                     channel,
                     offset))
+                self.config_output[channel]['Offset'] = offset
                 if print_changes:
                     print("CH{}'s Offset changed to {} V".format(
                             channel,
@@ -710,11 +697,38 @@ class Gen:
                 self.gen.write('SOUR{}:PHAS {}'.format(
                     channel,
                     phase))
+                self.config_output[channel]['Phase'] = phase
                 if print_changes:
                     print("CH{}'s Phase changed to {} PI".format(
                             channel,
                             phase))
     
-        self.config_output = self.get_config_output()
+        if duty_cycle is not None:
+            if waveform != 'PULS':
+                raise ValueError("Can only set duty cycle on 'PULS'")
+            elif self.config_output[channel]['Duty Cycle'] != duty_cycle:
+                self.gen.write('SOUR{}:PULS:DCYC {:.1f}'.format(
+                        channel,
+                        duty_cycle))
+                self.config_output[channel]['Duty Cycle'] = duty_cycle
+                if print_changes:
+                    print("CH{}'s Duty Cycle changed to \
+                          {}%".format(channel, duty_cycle))
+
+        if symmetry is not None:
+            if waveform != 'RAMP':
+                raise ValueError("Can only set symmetry on 'RAMP'")
+            elif self.config_output[channel]['Symmetry'] != symmetry:
+                self.gen.write('SOUR{}:FUNC:RAMP:SYMM {:.1f}'.format(
+                        channel,
+                        symmetry))
+                self.config_output[channel]['Symmetry'] = symmetry
+                if print_changes:
+                    print("CH{}'s Symmetry changed to \
+                          {}%".format(channel, symmetry))
         
         return
+    
+    def close(self):
+        
+        self.gen.close()
