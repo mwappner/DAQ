@@ -191,7 +191,8 @@ class Logger:
        
         #initialize stuff
         self._original_file = file
-        self._maxlen = maxlen
+        self.log = []
+        self.maxlen = maxlen
         self.log_format = log_format
         self.clearlog()
         
