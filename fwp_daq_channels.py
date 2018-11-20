@@ -431,8 +431,8 @@ class PWMOutputChannel:
             else:
                 self.__print__("Should 'co_pulse_duty...'")
             self.__duty_cycle = value
-            if self.status:
-                self.status = 'R' # reconfigures
+#            if self.status:
+#                self.status = 'R' # reconfigures
                 
     @property
     def frequency(self):
@@ -454,8 +454,8 @@ class PWMOutputChannel:
             else:
                 self.__print__("Should 'co_pulse_freq'")
             self.__frequency = value
-            if self.status:
-                self.status = 'R'
+#            if self.status:
+#                self.status = 'R'
     
     @property
     def status(self):

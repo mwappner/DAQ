@@ -14,6 +14,8 @@ import threading
 import fwp_analysis as fan
 import fwp_daq as daq
 import fwp_daq_channels as fch
+import fwp_pid as fpid
+import fwp_lab_instruments as ins
 from fwp_plot import add_style
 from fwp_save import savetxt, savefile_helper
 from fwp_utils import clip_between
@@ -66,7 +68,7 @@ task.close()
 device = daq.devices()[0] # Assuming you have only 1 connected NI device.
 pwm_pin = 38 # Literally the number of the DAQ pin
 pwm_frequency = 100e3
-pwm_duty_cycle = np.linspace(.1,1,10)
+pwm_duty_cycle = np.linspace(.1,.99,10)
 
 # ACTIVE CODE
 
@@ -82,6 +84,7 @@ task.channels.duty_cycle = pwm_duty_cycle[0]
 task.channels.status = True # turn on
 for dc in pwm_duty_cycle:
     task.channels.duty_cycle = dc # change duty cycle
+    print("Changed to {:.2f}".format(dc))
     """ Could also call by channel:
     task.ctr0.duty_cycle = dc
     """
@@ -90,6 +93,45 @@ task.channels.status = False # turn off
 
 # End communication
 task.close()
+
+"""What used to work:
+
+pwm_channels = 'Dev1/ctr0' # Clock output
+pwm_frequency = 100
+pwm_duty_cycle = np.linspace(.1,1,10)
+
+with nid.Task() as task_co:
+    
+    # Configure clock output
+    channels_co = daq.pwm_outputs(
+            task_co,
+            physical_channels = pwm_channels,
+            frequency = pwm_frequency,
+            duty_cycle = pwm_duty_cycle[0]
+            )
+    
+    # Set contiuous PWM signal
+    task_co.timing.cfg_implicit_timing(
+            sample_mode = nid.constants.AcquisitionType.CONTINUOUS)
+    
+    # Create a PWM stream
+    stream_co = sw.CounterWriter(task_co.out_stream)
+
+    # Play    
+    task_co.start()
+    
+    for dc in pwm_duty_cycle:
+        sleep(3)
+        channels_co.co_pulse_duty_cyc = dc
+        stream_co.write_one_sample_pulse_frequency(
+                frequency = channels_co.co_pulse_freq,
+                duty_cycle = channels_co.co_pulse_duty_cyc
+                )
+        print("Hope I changed duty cycle to {:.2f} x'D".format(dc))
+        sleep(3)
+    task_co.stop()
+    
+"""
 
 #%% Read_Single
 
@@ -356,9 +398,9 @@ plt.plot(time, signal, '.')
 
 """Don't forget to also try this with nsamples=None!"""
 
-#%% Just_One_Velocity
+#%% Velocity
 
-"""Reads the PWM signal it writes"""
+"""Measures velocity for a given duty cycle on the function generator"""
 
 # PARAMETERS
 
@@ -424,6 +466,82 @@ function = savefile_helper('Velocity', 'Duty_{:.2f}.txt')
 savetxt(function(pwm_duty_cycle),
         np.array([time, signal]).T, header=header, footer=footer)
 
+#%% Velocity_With_DAQ_PWM
+
+"""Measures velocity for a given duty cycle on the DAQ's PWM"""
+
+# PARAMETERS
+
+device = daq.devices()[0]
+
+ai_pin = 15 # Literally the number of the DAQ pin
+ai_conf = 'Ref' # Referenced mode (measure against GND)
+
+pwm_pin = 38
+pwm_frequency = 10e3
+pwm_duty_cycle = .20
+pwm_supply = 8
+
+nsamples = 1000
+samplerate = 5e3
+
+wheel_radius = 0.025 # in meters
+
+# ACTIVE CODE
+
+# Initialize communication
+task = daq.DAQ(device)
+
+# Define how to calculate velocity
+dt = nsamples/samplerate
+def calculate_velocity(read_data):
+    photogate_derivative = np.diff(read_data)
+    rotation_period = fan.peak_separation(photogate_derivative, 
+                                           dt, prominence=1, 
+                                           height=2)
+    velocity = wheel_radius/rotation_period
+    return velocity
+
+# Configure input channel
+task.add_analog_inputs(ai_pin)
+task.inputs.ai0.configuration = ai_conf
+task.inputs.samplerate = samplerate
+
+
+# Configure output channel
+task.add_pwm_outputs(pwm_pin)
+task.outputs.ctr0.frequency = pwm_frequency
+task.outputs.ctr0.duty_cycle = pwm_duty_cycle
+
+# Measure
+task.outputs.write(status=True) # Output on
+signal = task.inputs.__read__(nsamples,
+                              np.zeros(nsamples))
+signal = np.array(signal)
+task.outputs.write(status=False) # Output off
+
+# End communication                  
+task.close()
+
+# Calculate some stuff
+velocity = calculate_velocity(signal)
+time = np.arange(0, nsamples/samplerate, 1/samplerate)
+print(velocity)
+
+# Configure saving
+header = ['Time (s)', 'Voltage (V)']
+footer = dict(ai_conf=ai_conf,
+              pwm_frequency=pwm_frequency,
+              pwm_duty_cycle=pwm_duty_cycle,
+              pwm_supply=pwm_supply,
+              samplerate=samplerate,
+              velocity=velocity)
+
+# Save
+function = savefile_helper('Velocity', 'Duty_{:.2f}.txt')
+savetxt(function(pwm_duty_cycle),
+        np.array([time, signal]).T, header=header, footer=footer)
+
 #%% Control_Loop
 
 """Control loop designed to raise an object at constant speed.
@@ -434,6 +552,7 @@ Doesn't work with current 'fwp_daq' :("""
 
 device = daq.devices()[0]
 
+
 ai_pin = 15 # Literally the number of the DAQ pin
 ai_conf = 'Ref' # Referenced mode (measure against GND)
 
@@ -443,19 +562,26 @@ pwm_duty_cycle = np.linspace(.1,1,10)
 
 wheel_radius = 0.025 # in meters
 
-nsamples_callback = 20
-samplingrate = 100e3
+samplerate = 100e3
 nsamples_each = 1000
-
-# NO VALE dt=1/samplingrate, depende de cada cuanto corremos el PID
-pid = fan.PIDController(setpoint=1, kp=10, ki=5, kd=7, 
-                        dt=nsamples_callback/samplingrate, 
-                        log_data=True)
 
 # ACTIVE CODE
 
 # Initialize communication for writing and reading at the same time
 task = daq.DAQ(device)
+
+# Define how to calculate velocity
+dt = nsamples/samplerate
+def calculate_velocity(read_data):
+    photogate_derivative = np.diff(read_data)
+    rotation_period = fan.peak_separation(photogate_derivative, 
+                                           dt, prominence=1, 
+                                           height=2)
+    velocity = wheel_radius/rotation_period
+    return velocity
+pid = fan.PIDController(setpoint=1, kp=10, ki=5, kd=7, 
+                        dt=dt, log_data=True)
+
 
 # Configure inputs
 task.add_analog_inputs(ai_pin)
@@ -470,11 +596,7 @@ task.outputs.duty_cycle = pwm_duty_cycle[0]
 def callback(read_data):
     
     # Now I apply PID
-    photogate_derivative = np.diff(read_data)
-    angular_velocity = fan.peak_separation(photogate_derivative, 
-                                           pid.dt, prominence=1, 
-                                           height=2)
-    velocity = angular_velocity * wheel_radius
+    velocity = calculate_velocity(read_data)
     new_dc = pid.calculate(velocity)
       
     # And finally I change duty cycle
@@ -484,7 +606,7 @@ def callback(read_data):
 task.outputs.status = True
 signal = task.inputs.read(nsamples=None,
                           nsamples_each=500,
-                          samplerate=samplingrate,
+                          samplerate=samplerate,
                           nsamples_callback=nsamples_callback,
                           callback=callback)
 task.outputs.status = False
@@ -500,7 +622,7 @@ header = ['Feedback value (m/s)', 'New value (a.u.)',
 footer = dict(ai_conf=ai_conf,
               pwm_frequency=pwm_frequency,
               pid=pid, # PID parameters
-              samplerate=samplingrate,
+              samplerate=samplerate,
               nsamples_each=nsamples_each,
               nsamples_callback=nsamples_callback)
 
@@ -523,6 +645,7 @@ to 'Task.close()' and reconfigure every time"""
 # PARAMETERS
 
 device = daq.devices()[0]
+gen_port = 'USB0::0x0699::0x0346::C034198::INSTR'
 
 ai_pin = 15 # Literally the number of the DAQ pin
 ai_conf = 'Ref' # Referenced mode (measure against GND)
@@ -533,29 +656,38 @@ pwm_initial_duty = 0.01
 
 wheel_radius = 0.025 # in meters
 
-samplingrate = 100e3
+samplerate = 100e3
 nsamples_each = 100
-
-pid = fan.PIDController(setpoint=1, kp=10, ki=5, kd=7, 
-                        dt=nsamples_each/samplingrate, 
-                        log_data=True)
 
 # ACTIVE CODE
 
 # Initialize communication for writing and reading at the same time
 task = daq.DAQ(device)
+gen = ins.Gen(gen_port, nchannels=1)
+
+# Define how to calculate velocity
+dt = nsamples/samplerate
+def calculate_velocity(read_data):
+    photogate_derivative = np.diff(read_data)
+    rotation_period = fan.peak_separation(photogate_derivative, 
+                                           dt, prominence=1, 
+                                           height=2)
+    velocity = wheel_radius/rotation_period
+    return velocity
+pid = fpid.PIDController(setpoint=1, kp=10, ki=5, kd=7, 
+                         dt=dt, log_data=True)
 
 # Configure inputs
 task.add_analog_inputs(ai_pin)
 task.inputs.pins.configuration = ai_conf
-task.inputs._Task__task.timing.cfg_samp_clk_timing(
-        rate=samplingrate,
-        sample_mode=daq.single)
+task.inputs.samplerate = samplerate
 
 # Configure outputs
-task.add_pwm_outputs(pwm_pin)
-task.outputs.pins.frequency = pwm_frequency
-task.outputs.pins.duty_cycle = pwm_initial_duty
+#task.add_pwm_outputs(pwm_pin)
+#task.outputs.pins.frequency = pwm_frequency
+#task.outputs.pins.duty_cycle = pwm_initial_duty
+gen.output(True, waveform='squ75', frequency=10e3)
+gen.output(True, offset=2.5, amplitude=5)
 
 #%%
 
@@ -568,19 +700,13 @@ def calculate_duty(read_data):
     global last_velocity
     
     # Now I apply PID
-    photogate_derivative = np.diff(read_data)
     try:
-        rotation_period = fan.peak_separation(photogate_derivative, 
-                                               pid.dt, prominence=1, 
-                                               height=2)
-        velocity = wheel_radius/rotation_period
-
+        velocity = calculate_velocity(read_data)
     except ValueError: # No peaks found
         velocity = pid.last_log.feedback_value # Return last value
-
     new_dc = pid.calculate(velocity)
       
-    # And finally I change duty cycle
+    # And then I change duty cycle
     task.outputs.pins.duty_cycle = clip_between(new_dc, *(.01,.99))
     
     return velocity
