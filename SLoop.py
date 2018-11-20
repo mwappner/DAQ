@@ -9,13 +9,15 @@ control loop that can raise an object at a constant given velocity.
 @author: GrupoFWP
 """
 
+import queue
+import threading
 import fwp_analysis as fan
 import fwp_daq as daq
 import fwp_daq_channels as fch
-import fwp_plot as fwplot
-import fwp_save as sav
+from fwp_plot import add_style
+from fwp_save import savetxt
+from fwp_utils import clip_between
 import matplotlib.pyplot as plt
-#import nidaqmx as nid
 import numpy as np
 import os
 from time import sleep
@@ -113,12 +115,12 @@ task.add_channels(fch.AnalogInputChannel, *ai_pins)
 task.channels.configuration = ai_conf
 
 # Make a measurement
-signal = task.read(nsamples_total=10000, 
+signal = task.read(nsamples=10000, 
                    samplerate=None) # None means maximum SR
 """Beware!
 An daqError will be raised if not all the DAQ's acquired samples can be 
 passed to the PC on time.
-2 channels => nsamples_total = 29500 can be done but not 30000.
+2 channels => nsamples = 29500 can be done but not 30000.
 """
 
 # End communication
@@ -142,17 +144,16 @@ nsamples = int(200e3)
 # ACTIVE CODE
 
 # Initialize communication in order to read
-task = daq.Task(device, mode='r')
+task = daq.Task(device, mode='r', print_messages=True)
         
 # Configure input
 task.add_channels(fch.AnalogInputChannel, *ai_pins)
 task.channels.configuration = ai_conf
 
 # Make a continuous measurement
-signal = task.read(nsamples_total=None, # None means continuous
+signal = task.read(nsamples=None, # None means continuous
                    samplerate=50e3, # None means maximum SR
-                   nsamples_each=500,
-                   )
+                   nsamples_each=500)
 
 # End communication
 task.close()
@@ -177,7 +178,7 @@ pwm_frequency = 100e3
 pwm_duty_cycle = np.linspace(.1,1,10)
 
 nsamples = 10000
-samplerate = 100e3
+samplerate = 400e3
 nsamples_each = 1000
 
 # ACTIVE CODE
@@ -195,7 +196,7 @@ task.add_pwm_outputs(pwm_pin)
 
 # Measure
 task.outputs.write(status=True) # Output on
-signal = task.inputs.read(nsamples_total=nsamples,
+signal = task.inputs.read(nsamples=nsamples,
                           samplerate=samplerate,
                           nsamples_each=nsamples_each)
 task.outputs.write(status=False) # Output off
@@ -211,12 +212,81 @@ time = np.arange(0, len(signal)/samplerate, 1/samplerate)
 fig = plt.figure()
 plt.xlabel('Time (s)')
 plt.ylabel('Data (V)')
-fwplot.add_style()
+add_style()
 plt.plot(time, signal, '.')
 
+'''Check why current 'fwp_daq.Task.read' doesn't acquire continuously
+
+import nidaqmx as nid
+import nidaqmx.stream_readers as sr
+
+# ACTIVE CODE
+
+# Initialize communication in order to read
+task = nid.Task()
+streamer = sr.AnalogSingleChannelReader(
+        task.in_stream)
+        
+# Configure input
+ai_channel = task.ai_channels.add_ai_voltage_chan(
+        physical_channel = 'Dev1/ai0',
+        units = nid.constants.VoltageUnits.VOLTS
+        )
+ai_channel.ai_term_cfg = nid.constants.TerminalConfiguration.NRSE
+
+do_return = True
+signal = zeros((1, nsamples_each),
+               dtype=np.float64)
+each_signal = zeros((1,
+                     nsamples_each),
+                     dtype=np.float64)
+message = "Number of {}-sized samples' arrays".format(
+        nsamples_each)
+message = message + " read: {}"
+ntimes = 0
+def no_callback(task_handle, 
+            every_n_samples_event_type,
+            number_of_samples, callback_data):
+
+    """A nidaqmx callback that just reads"""
+    
+    global do_return, nsamples_each
+    global ntimes, message
+    global each_signal, signal
+    
+    if do_return:
+        each_signal = streamer.read_many_sample(
+            each_signal,
+            number_of_samples_per_channel=nsamples_each,
+            timeout=20)
+        
+        signal = multiappend(signal, each_signal)
+    ntimes += 1
+    print(message.format(ntimes))
+
+    return 0
+
+
+task.register_every_n_samples_acquired_into_buffer_event(
+        nsamples_callback, # call callback every
+        wrapper_callback)
+
+
+# Make a continuous measurement
+signal = task.read(nsamples=None, # None means continuous
+                   samplerate=50e3, # None means maximum SR
+                   nsamples_each=500)
+
+# End communication
+task.close()
+'''
 #%% Read_N_Write_Callback
 
-"""Measure with a plotting callback"""
+"""Measure with a plotting callback
+
+This doesn't work with current 'fwp_daq.Task.read' :(
+Apparently, callback cannot be used with streamers. 
+Shame on you, nidaqmx!"""
 
 # PARAMETERS
 
@@ -249,7 +319,7 @@ task.add_pwm_outputs(pwm_pin)
 fig = plt.figure()
 ax = plt.axes()
 line = ax.plot([])
-fwplot.add_style()
+add_style()
 
 # Define plotting callback
 def callback(read_data):
@@ -263,7 +333,7 @@ def callback(read_data):
 
 # Measure
 task.outputs.write() # Output on
-signal = task.inputs.read(nsamples_total=nsamples,
+signal = task.inputs.read(nsamples=nsamples,
                           samplerate=samplerate,
                           nsamples_each=nsamples_each,
                           callback=callback,
@@ -279,12 +349,16 @@ time = np.arange(0, len(signal)/samplerate, 1/samplerate)
 fig = plt.figure()
 plt.xlabel('Time (s)')
 plt.ylabel('Data (V)')
-fwplot.add_style()
+add_style()
 plt.plot(time, signal, '.')
 
-"""Don't forget to also try this with nsamples_total=None!"""
+"""Don't forget to also try this with nsamples=None!"""
 
 #%% Control_Loop
+
+"""Control loop designed to raise an object at constant speed.
+
+Doesn't work with current 'fwp_daq' :("""
 
 # PARAMETERS
 
@@ -334,11 +408,11 @@ def callback(read_data):
     new_dc = pid.calculate(velocity)
       
     # And finally I change duty cycle
-    task.ouputs.duty_cycle = fan.clip_bewtween(new_dc, *(0,100))
+    task.ouputs.duty_cycle = clip_between(new_dc, *(0,100))
   
 # Measure
 task.outputs.status = True
-signal = task.inputs.read(nsamples_total=None,
+signal = task.inputs.read(nsamples=None,
                           nsamples_each=500,
                           samplerate=samplingrate,
                           nsamples_callback=nsamples_callback,
@@ -361,5 +435,109 @@ footer = dict(ai_conf=ai_conf,
               nsamples_callback=nsamples_callback)
 
 # Save log
-sav.savetxt(os.path.join(os.getcwd(), 'Measurements', 'Log.txt'),
-             log, header=header, footer=footer)
+savetxt(os.path.join(os.getcwd(), 'Measurements', 'Log.txt'),
+        log, header=header, footer=footer)
+
+#%% Control_Loop_No_stream
+
+"""Another control loop designed to raise an object at constant speed.
+
+This script doesn't use the current 'fwp_daq.Task.read' on continuous 
+acquisition mode because we didn't want any more trouble with 'callback'. 
+It doesn't use it on single acquisition mode either because it seemed 
+simpler not to use 'streamers' at all.
+
+Beware! It's currently divided into three pieces so that we don't have 
+to 'Task.close()' and reconfigure every time"""
+
+# PARAMETERS
+
+device = daq.devices()[0]
+
+ai_pin = 15 # Literally the number of the DAQ pin
+ai_conf = 'Ref' # Referenced mode (measure against GND)
+
+pwm_pin = 38 # Literally the number of the DAQ pin
+pwm_frequency = 100e3
+pwm_initial_duty = 0.01
+
+wheel_radius = 0.025 # in meters
+
+samplingrate = 100e3
+nsamples_each = 100
+
+pid = fan.PIDController(setpoint=1, kp=10, ki=5, kd=7, 
+                        dt=nsamples_each/samplingrate, 
+                        log_data=True)
+
+# ACTIVE CODE
+
+# Initialize communication for writing and reading at the same time
+task = daq.DAQ(device)
+
+# Configure inputs
+task.add_analog_inputs(ai_pin)
+task.inputs.pins.configuration = ai_conf
+task.inputs._Task__task.timing.cfg_samp_clk_timing(
+        rate=samplingrate,
+        sample_mode=daq.single)
+
+# Configure outputs
+task.add_pwm_outputs(pwm_pin)
+task.outputs.pins.frequency = pwm_frequency
+task.outputs.pins.duty_cycle = pwm_initial_duty
+
+#%%
+
+pid.reset()
+pid.clearlog()
+
+# Define callback's replacement
+def calculate_duty(read_data):
+    
+    global last_velocity
+    
+    # Now I apply PID
+    photogate_derivative = np.diff(read_data)
+    try:
+        angular_velocity = fan.peak_separation(photogate_derivative, 
+                                               pid.dt, prominence=1, 
+                                               height=2)
+        velocity = angular_velocity * wheel_radius
+
+    except ValueError: # No peaks found
+        velocity = pid.last_log.feedback_value # Return last value
+
+    new_dc = pid.calculate(velocity)
+      
+    # And finally I change duty cycle
+    task.outputs.pins.duty_cycle = clip_between(new_dc, *(.01,.99))
+
+q = queue.Queue()
+#data = task.inputs._Task__task.read(
+#        number_of_samples_per_channel=int(nsamples_each))
+#q.put(data)
+
+def worker():
+    while True:
+        data = q.get() #waits for data to be available
+        print(1)
+        new_duty = calculate_duty(data)
+        print(2)
+        task.outputs.channels.duty_cycle = new_duty
+        print(3)
+        
+t = threading.Thread(target=worker)
+task.outputs.status = True
+t.start()
+
+while True:
+    data = task.inputs._Task__task.read(
+        number_of_samples_per_channel=int(nsamples_each))    
+    q.put(np.array(data))
+    sleep(.1)
+
+#%%
+
+task.outputs.status = False
+task.close()
