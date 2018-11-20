@@ -939,7 +939,7 @@ class Task:
             
             """A nidaqmx callback that wrapps, reads and stops"""
             
-            global callback
+            global callback, nsamples
             global do_return, nsamples_each, nsamples_acquired
             global ntimes, message
             global each_signal, signal
@@ -981,22 +981,22 @@ class Task:
     def __read__(self, nsamples, shape):
         
         data = self.__task.read(
-            number_of_samples_per_channel=nsamples)
+            number_of_samples_per_channel=int(nsamples))
 
-        data = np.array(data).T
-        if self.nchannels == 1:
-            data = np.expand_dims(data, axis=0).T
+#        data = np.array(data).T
+#        if self.nchannels == 1:
+#            data = np.expand_dims(data, axis=0).T
         
         return data
 
     def __stream_read__(self, nsamples, shape):
         
-        data = self.__streamer.read_many_sample(
+        shape = self.__streamer.read_many_sample(
             shape,
-            number_of_samples_per_channel=nsamples,
+            number_of_samples_per_channel=int(nsamples),
             timeout=20)
         
-        return data
+        return shape
         
     def __check_samplerate__(self, samplerate):
         
