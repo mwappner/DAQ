@@ -522,3 +522,10 @@ class PIDController:
         intcls = integral_switcher(integrator_str)
         return intcls(dt)
             
+    @property
+    def params(self):
+        return dict(kp=self.kp,
+                    ki=self.ki,
+                    kd=self.kd,
+                    dt=self.dt,
+                    setpoint=self.setpoint)
