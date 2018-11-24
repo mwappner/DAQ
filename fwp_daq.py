@@ -116,13 +116,13 @@ class DAQ:
         
         # DAQ channels' manager
         self.__inputs = Task(self.__device,
-                            mode='r',
-                            print_messages=print_messages,
-                            test_mode=test_mode)
-        self.__outputs = Task(self.__device,
-                             mode='w',
+                             mode='r',
                              print_messages=print_messages,
                              test_mode=test_mode)
+        self.__outputs = Task(self.__device,
+                              mode='w',
+                              print_messages=print_messages,
+                              test_mode=test_mode)
         self.tasks = WrapperDict(inputs = self.inputs,
                                  outputs = self.outputs)
     
@@ -649,6 +649,7 @@ class Task:
             signal = np.array(dtype=np.float64)
             
         # Just in case, be ready for measuring in tiny pieces
+        global each_signal, message, ntimes
         each_signal = utl.zeros((self.nchannels,
                              nsamples_each),
                              dtype=np.float64)
@@ -656,7 +657,6 @@ class Task:
                 nsamples_each)
         message = message + " read: {}"
         ntimes = 0
-        global each_signal, message, ntimes
     
         # SINGLE ACQUISITION
         if nsamples is not None:
@@ -831,12 +831,17 @@ class Task:
             number_of_samples_per_channel=int(nsamples))
         self.__task.wait_until_done()
         
-        # IS ALL THIS REALLY NECESSARY?
-        data = np.array(data).T
-        if self.nchannels == 1:
-            data = np.expand_dims(data, axis=0).T
-        
-        return data
+#        # IS ALL THIS REALLY NECESSARY?
+#        try:
+#            len(data[0])
+#        except:
+#            return np.array(data)
+#        
+#        data = np.array(data).T
+#        if self.nchannels == 1:
+#            data = np.expand_dims(data, axis=0).T
+#        
+        return np.array(data)
 
     def __stream_read__(self, nsamples, signal):
         
@@ -1005,8 +1010,11 @@ class Task:
                             ]
         
         try:
-            self.__print__("Chose '{}' as wrapper".format(
+            try:
+                self.__print__("Chose '{}' as wrapper".format(
                     wrapper_callback[option].__name__))
+            except AttributeError:
+                self.__print__("Chose 'None' as wrapper")
             return wrapper_callback[option]
         except IndexError:
             raise KeyError("No callback wrapper found")
