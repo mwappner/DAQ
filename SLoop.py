@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-This script is to make measurements with a National Instruments DAQ.
+This script is to measure and make a control loop with a NI USB6212 DAQ.
 
 This script is based on our old script 'SOldLoop'. It works using the 
-'fwp_daq' module we designed. This script's goal goal is to make a 
-control loop that can raise an object at a constant given velocity.
+'fwp_daq' module we designed. This script's goal is to make a control 
+loop that can raise an object at a constant given velocity.
 
 @author: GrupoFWP
 """
@@ -15,7 +15,7 @@ import fwp_analysis as fan
 import fwp_daq as daq
 import fwp_daq_channels as fch
 import fwp_pid as fpid
-import fwp_lab_instruments as ins
+#import fwp_lab_instruments as ins
 from fwp_plot import add_style
 from fwp_save import savetxt, savefile_helper
 from fwp_utils import clip_between
@@ -23,11 +23,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 from time import sleep
-#conf = nid.constants.TerminalConfiguration
 
 #%% PWM_Single
 
-"""Setes a PWM output with constant duty cycle and therefore mean value"""
+"""Sets a PWM output with constant duty cycle and therefore mean value"""
 
 # PARAMETERS
 
@@ -93,45 +92,6 @@ task.channels.status = False # turn off
 
 # End communication
 task.close()
-
-"""What used to work:
-
-pwm_channels = 'Dev1/ctr0' # Clock output
-pwm_frequency = 100
-pwm_duty_cycle = np.linspace(.1,1,10)
-
-with nid.Task() as task_co:
-    
-    # Configure clock output
-    channels_co = daq.pwm_outputs(
-            task_co,
-            physical_channels = pwm_channels,
-            frequency = pwm_frequency,
-            duty_cycle = pwm_duty_cycle[0]
-            )
-    
-    # Set contiuous PWM signal
-    task_co.timing.cfg_implicit_timing(
-            sample_mode = nid.constants.AcquisitionType.CONTINUOUS)
-    
-    # Create a PWM stream
-    stream_co = sw.CounterWriter(task_co.out_stream)
-
-    # Play    
-    task_co.start()
-    
-    for dc in pwm_duty_cycle:
-        sleep(3)
-        channels_co.co_pulse_duty_cyc = dc
-        stream_co.write_one_sample_pulse_frequency(
-                frequency = channels_co.co_pulse_freq,
-                duty_cycle = channels_co.co_pulse_duty_cyc
-                )
-        print("Hope I changed duty cycle to {:.2f} x'D".format(dc))
-        sleep(3)
-    task_co.stop()
-    
-"""
 
 #%% Read_Single
 
@@ -260,7 +220,7 @@ plt.ylabel('Data (V)')
 add_style()
 plt.plot(time, signal, '.')
 
-'''Check why current 'fwp_daq.Task.read' doesn't acquire continuously
+'''Check why c059fd5 'fwp_daq.Task.read' doesn't acquire continuously
 
 import nidaqmx as nid
 import nidaqmx.stream_readers as sr
@@ -329,7 +289,7 @@ task.close()
 
 """Measure with a plotting callback
 
-This doesn't work with current 'fwp_daq.Task.read' :(
+This didn't work with c059fd5 'fwp_daq.Task.read' :(
 Apparently, callback cannot be used with streamers. 
 Shame on you, nidaqmx!"""
 
@@ -479,7 +439,7 @@ ai_conf = 'Ref' # Referenced mode (measure against GND)
 
 pwm_pin = 38
 pwm_frequency = 10e3
-pwm_duty_cycle = .20
+pwm_duty_cycle = .3
 pwm_supply = 8
 
 nsamples = 1000
@@ -507,7 +467,6 @@ task.add_analog_inputs(ai_pin)
 task.inputs.ai0.configuration = ai_conf
 task.inputs.samplerate = samplerate
 
-
 # Configure output channel
 task.add_pwm_outputs(pwm_pin)
 task.outputs.ctr0.frequency = pwm_frequency
@@ -515,8 +474,7 @@ task.outputs.ctr0.duty_cycle = pwm_duty_cycle
 
 # Measure
 task.outputs.write(status=True) # Output on
-signal = task.inputs.__read__(nsamples,
-                              np.zeros(nsamples))
+signal = task.inputs.__read__(nsamples)
 signal = np.array(signal)
 task.outputs.write(status=False) # Output off
 
@@ -546,12 +504,12 @@ savetxt(function(pwm_duty_cycle),
 
 """Control loop designed to raise an object at constant speed.
 
-Doesn't work with current 'fwp_daq' :("""
+This was our original idea using nidaqmx callback. Didn't work on 
+c059fd5 'fwp_daq' because callback can't use stream_readers"""
 
 # PARAMETERS
 
 device = daq.devices()[0]
-
 
 ai_pin = 15 # Literally the number of the DAQ pin
 ai_conf = 'Ref' # Referenced mode (measure against GND)
@@ -582,18 +540,17 @@ def calculate_velocity(read_data):
 pid = fan.PIDController(setpoint=1, kp=10, ki=5, kd=7, 
                         dt=dt, log_data=True)
 
-
 # Configure inputs
 task.add_analog_inputs(ai_pin)
-task.inputs.configuration = ai_conf
+task.inputs.pins.configuration = ai_conf
 
 # Configure outputs
 task.add_pwm_outputs(pwm_pin)
-task.outputs.frequency = pwm_frequency
-task.outputs.duty_cycle = pwm_duty_cycle[0]
+task.outputs.pins.frequency = pwm_frequency
+task.outputs.pins.duty_cycle = pwm_duty_cycle[0]
 
 # Define callback
-def callback(read_data):
+def calculate_duty_cycle(read_data):
     
     # Now I apply PID
     velocity = calculate_velocity(read_data)
@@ -603,13 +560,13 @@ def callback(read_data):
     task.ouputs.duty_cycle = clip_between(new_dc, *(0,100))
   
 # Measure
-task.outputs.status = True
+task.outputs.pins.status = True
 signal = task.inputs.read(nsamples=None,
                           nsamples_each=500,
                           samplerate=samplerate,
                           nsamples_callback=nsamples_callback,
-                          callback=callback)
-task.outputs.status = False
+                          callback=calculate_duty_cycle)
+task.outputs.pins.status = False
 
 # Close communication
 task.close()
@@ -634,18 +591,17 @@ savetxt(os.path.join(os.getcwd(), 'Measurements', 'Log.txt'),
 
 """Another control loop designed to raise an object at constant speed.
 
-This script doesn't use the current 'fwp_daq.Task.read' on continuous 
+This script doesn't use c059fd5 'fwp_daq.Task.read' on continuous 
 acquisition mode because we didn't want any more trouble with 'callback'. 
 It doesn't use it on single acquisition mode either because it seemed 
-simpler not to use 'streamers' at all.
-
-Beware! It's currently divided into three pieces so that we don't have 
-to 'Task.close()' and reconfigure every time"""
+simpler not to use 'streamers' at all. In fact, just in case it holds 
+commented commands that allow to use a PWM made with a function 
+generator instead of a DAQ."""
 
 # PARAMETERS
 
 device = daq.devices()[0]
-gen_port = 'USB0::0x0699::0x0346::C034198::INSTR'
+#gen_port = 'USB0::0x0699::0x0346::C034198::INSTR'
 
 ai_pin = 15 # Literally the number of the DAQ pin
 ai_conf = 'Ref' # Referenced mode (measure against GND)
@@ -663,10 +619,10 @@ nsamples_each = 100
 
 # Initialize communication for writing and reading at the same time
 task = daq.DAQ(device)
-gen = ins.Gen(gen_port, nchannels=1)
+#gen = ins.Gen(gen_port, nchannels=1)
 
 # Define how to calculate velocity
-dt = nsamples/samplerate
+dt = nsamples_each/samplerate
 def calculate_velocity(read_data):
     photogate_derivative = np.diff(read_data)
     rotation_period = fan.peak_separation(photogate_derivative, 
@@ -683,59 +639,68 @@ task.inputs.pins.configuration = ai_conf
 task.inputs.samplerate = samplerate
 
 # Configure outputs
-#task.add_pwm_outputs(pwm_pin)
-#task.outputs.pins.frequency = pwm_frequency
-#task.outputs.pins.duty_cycle = pwm_initial_duty
-gen.output(True, waveform='squ75', frequency=10e3)
-gen.output(True, offset=2.5, amplitude=5)
+task.add_pwm_outputs(pwm_pin)
+task.outputs.pins.frequency = pwm_frequency
+task.outputs.pins.duty_cycle = pwm_initial_duty
+#gen.output(False, waveform='squ', duty_cycle=pwm_initial_duty)
+#gen.output(False, offset=2.5, amplitude=5, frequency=10e3)
 
-#%%
-
+# Just in case
 pid.reset()
 pid.clearlog()
 
 # Define callback's replacement
 def calculate_duty(read_data):
     
-    global last_velocity
-    
-    # Now I apply PID
     try:
         velocity = calculate_velocity(read_data)
     except ValueError: # No peaks found
         velocity = pid.last_log.feedback_value # Return last value
     new_dc = pid.calculate(velocity)
-      
-    # And then I change duty cycle
-    task.outputs.pins.duty_cycle = clip_between(new_dc, *(.01,.99))
+    new_dc = clip_between(new_dc, *(.01,.99))
     
-    return velocity
+    return new_dc
 
+# Define one thread
 q = queue.Queue()
-#data = task.inputs._Task__task.read(
-#        number_of_samples_per_channel=int(nsamples_each))
-#q.put(data)
-
 def worker():
     while True:
         data = q.get() #waits for data to be available
-        print(1)
-        new_duty = calculate_duty(data)
-        print(2)
-        task.outputs.channels.duty_cycle = new_duty
-        print(3)
-        
+        new_dc = calculate_duty(data)
+        task.outputs.pins.duty_cycle = new_dc
+#        gen.output(duty_cycle=new_dc)
 t = threading.Thread(target=worker)
-task.outputs.status = True
+
+# Measurement per se
+task.outputs.pins.status = True
+#gen.output(True)
 t.start()
-
 while True:
-    data = task.inputs._Task__task.read(
-        number_of_samples_per_channel=int(nsamples_each))    
-    q.put(np.array(data))
-    sleep(.1)
+    try:
+        # Here goes the other thread
+        data = task.inputs._Task__task.read(
+            number_of_samples_per_channel=int(nsamples_each))    
+        q.put(np.array(data))
+    except KeyboardInterrupt:
+        pass
+task.outputs.pins.status = False
+#gen.output(False)
 
-#%%
-
-task.outputs.status = False
+# Close communication
 task.close()
+
+# Configure log
+log = np.array(pid.log).T  # Categories by columns
+header = ['Feedback value (m/s)', 'New value (a.u.)', 
+          'Proportional term (u.a.)', 'Integral term (u.a.)', 
+          'Derivative term (u.a.)']
+footer = dict(ai_conf=ai_conf,
+              pwm_frequency=pwm_frequency,
+              pid=pid, # PID parameters
+              samplerate=samplerate,
+              nsamples_each=nsamples_each,
+              nsamples_callback=nsamples_callback)
+
+# Save log
+savetxt(os.path.join(os.getcwd(), 'Measurements', 'Log.txt'),
+        log, header=header, footer=footer)
