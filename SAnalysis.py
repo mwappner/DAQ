@@ -470,7 +470,6 @@ folder = os.path.join(os.getcwd(),
                       name)
 #I've got 5 files with multiple channel adquisition. I want to see how interchannel value changes.
 
-
 interval = [(0, 57000), (8000, 94000), (0, 25000)]
 
 slicer = lambda vector, interval: vector[interval[0]:interval[1]]
@@ -530,11 +529,9 @@ plt.tick_params(labelsize=12)
 
 fig.savefig('multiplex.pdf', bbox_inches='tight')
 
-
 for k in interchanneltime:
     stri = '{:.3e}\t'*len(k)
     print(stri.format(*k))
-
 
 #%% 
 name = 'Settling_Time'

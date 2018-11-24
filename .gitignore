@@ -1,5 +1,6 @@
 # FWP
 /Measurements
+/DAQMeasurements
 *.pdf
 *.png
 Borrador.py

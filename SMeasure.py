@@ -47,7 +47,7 @@ mode = nid.constants.TerminalConfiguration.NRSE # Terminal configuration
 # Make a measurement using NI DAQ.
 with nid.Task() as task:
     task.ai_channels.add_ai_voltage_chan(
-            "Dev20/ai1", # analog input AI 1
+            "Dev1/ai1", # analog input AI 1
             terminal_config=mode)
     task.timing.cfg_samp_clk_timing(
             samplerate,

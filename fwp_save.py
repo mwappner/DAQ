@@ -454,11 +454,10 @@ def savefile_helper(folder,
         parent_folder = os.path.join(os.getcwd(), parent_folder)
         
     save_dir = os.path.join(parent_folder, folder)
-    save_dir = new_dir(save_dir)
     
-    def filename_maker(*args):
+    def filename_maker(*args, **kwargs):
         
-        return os.path.join(save_dir, filename_template.format(*args))
+        return os.path.join(save_dir, filename_template.format(*args, **kwargs))
 
     return filename_maker
 
