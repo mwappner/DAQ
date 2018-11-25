@@ -289,8 +289,8 @@ def peak_separation(signal, time=1, *args, **kwargs):
         
     peaks = find_peaks(signal, *args, **kwargs)[0]
     
-    if not peaks: #no peaks found
-        raise ValueError('No peaks found with gien parameters.')
+    if len(peaks)<2: #no peaks found
+        raise ValueError('Not enough peaks found with given parameters.')
     
     if isinstance(time, (list, tuple, np.ndarray)):
         if not len(signal)==len(time):
@@ -300,7 +300,7 @@ def peak_separation(signal, time=1, *args, **kwargs):
     else:
         peak_times = peaks * time
         
-    return np.mean(peak_times)
+    return np.mean(np.diff(peak_times))
 
 #%% PID class
 

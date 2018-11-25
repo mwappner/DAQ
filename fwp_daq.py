@@ -116,13 +116,13 @@ class DAQ:
         
         # DAQ channels' manager
         self.__inputs = Task(self.__device,
-                            mode='r',
-                            print_messages=print_messages,
-                            test_mode=test_mode)
-        self.__outputs = Task(self.__device,
-                             mode='w',
+                             mode='r',
                              print_messages=print_messages,
                              test_mode=test_mode)
+        self.__outputs = Task(self.__device,
+                              mode='w',
+                              print_messages=print_messages,
+                              test_mode=test_mode)
         self.tasks = WrapperDict(inputs = self.inputs,
                                  outputs = self.outputs)
     
@@ -545,8 +545,9 @@ class Task:
                     self.__print__("Should 'streamer._in_stream.in...'")
                 self.__buffersize = value
     
-    def read(self, nsamples=None, samplerate=None, callback=None,
-             nsamples_each=200, use_stream=True, do_return=True):
+    def read(self, nsamples=None, samplerate=None, duration=None,
+             callback=None, nsamples_each=200, use_stream=True, 
+             do_return=True):
         
         """Reads from the input channels.
         
@@ -559,6 +560,10 @@ class Task:
         samplerate=None : int, float, optional
             Samplerate in Hz by channel. If None, samplerate attribute 
             is used, which is maximum samplerate by default.
+        duration=None : int, optional
+            Total duration of the measurement. If nsamples is not 
+            specified but duration is, a new nsamples will be determined 
+            as 'nsamples=duration*samplerate'.
         callback=None : function, optional
             Callback function. Mustn't return anything. And must either 
             take in no parameters or either take in only one parameter, 
@@ -590,16 +595,26 @@ class Task:
         """
 
         # INITIAL PARAMETERS
+        
+        # First, some general configuration
         if self.write_mode:
             raise TypeError("This task is meant to write!")
 
         if samplerate is None:
             samplerate = self.samplerate
-            
         else:
             self.__check_samplerate__(samplerate)
+            
+        if nsamples is None and duration is not None:
+            nsamples = duration * samplerate
 
-        # See if callback has any parameters
+        # Is callback required?
+        if nsamples is not None and nsamples < nsamples_each:
+            callback=None
+            self.__print__("Callback won't be played because \
+                           'nsamples_each' is smaller than 'nsamples'")
+
+        # Does callback take data as a parameter?
         if callback is None:
             callback_parameters = False             
         else:            
@@ -608,7 +623,7 @@ class Task:
                 raise ValueError("Callback must have only 1 variable")
             callback_parameters = bool(callback_parameters)
 
-        # If callback needed, get a callback that wraps the user's
+        # Then, get a wrapper callback to wrap the user's
         wrapper_callback = self.__choose_wrapper_callback__(
             nsamples,
             callback,
@@ -619,8 +634,6 @@ class Task:
         
         # If wrapper callback needed, configure it.
         if wrapper_callback is not None:
-            
-            # Configure callback
             if not self.test_mode:
                 self.__task.register_every_n_samples_acquired_into_buffer_event(
                         nsamples_each, # call callback every
@@ -629,13 +642,14 @@ class Task:
                 self.__print__("Should 'task.register_every...'")
     
         # If necessary, set array for the total acquired samples
-        if do_return and nsamples is not None:
+        if do_return and nsamples is not None: # single
             signal = utl.zeros((self.nchannels, nsamples),
                            dtype=np.float64)
-        elif do_return:
+        elif do_return: # continuous
             signal = np.array(dtype=np.float64)
             
         # Just in case, be ready for measuring in tiny pieces
+        global each_signal, message, ntimes
         each_signal = utl.zeros((self.nchannels,
                              nsamples_each),
                              dtype=np.float64)
@@ -667,9 +681,7 @@ class Task:
                                     nsamples,
                                     signal)
                         else:
-                            signal = self.__read__(
-                                    nsamples,
-                                    signal)
+                            signal = self.__read__(nsamples)
                         self.__task.stop()
                     else:
                         self.__print__("Should 'start'+'read_ma...'+'stop'")
@@ -813,6 +825,33 @@ class Task:
         
         self.__task.close()
     
+    def __read__(self, nsamples):
+        
+        data = self.__task.read(
+            number_of_samples_per_channel=int(nsamples))
+        self.__task.wait_until_done()
+        
+#        # IS ALL THIS REALLY NECESSARY?
+#        try:
+#            len(data[0])
+#        except:
+#            return np.array(data)
+#        
+#        data = np.array(data).T
+#        if self.nchannels == 1:
+#            data = np.expand_dims(data, axis=0).T
+#        
+        return np.array(data)
+
+    def __stream_read__(self, nsamples, signal):
+        
+        self.__streamer.read_many_sample(
+            signal,
+            number_of_samples_per_channel=int(nsamples),
+            timeout=20)
+        
+        return signal
+
     def __choose_wrapper_callback__(self, nsamples, callback, 
                                     callback_parameters,
                                     use_stream):
@@ -850,9 +889,9 @@ class Task:
             global each_signal, signal
             
             if do_return:
-                each_signal = self.__read__(nsamples_each,
-                                            each_signal)
+                each_signal = self.__read__(nsamples_each)
                 signal = utl.multiappend(signal, each_signal)
+                
             ntimes += 1
             self.__print__(message.format(ntimes))
             
@@ -862,7 +901,7 @@ class Task:
                                  every_n_samples_event_type,
                                  number_of_samples, callback_data):
             
-            """A nidaqmx callback that just reads"""
+            """A nidaqmx callback that just reads with read_streamers"""
             
             global do_return, nsamples_each
             global ntimes, message
@@ -878,10 +917,10 @@ class Task:
             return 0
 
         def wrap_callback(task_handle, 
-                               every_n_samples_event_type,
-                               number_of_samples, callback_data):
+                          every_n_samples_event_type,
+                          number_of_samples, callback_data):
             
-            """A nidaqmx callback that wrapps, reads and stops"""
+            """A nidaqmx callback that just wrapps"""
 
             global callback
             
@@ -890,8 +929,8 @@ class Task:
             return 0
         
         def noarg_callback(task_handle, 
-                          every_n_samples_event_type,
-                          number_of_samples, callback_data):
+                           every_n_samples_event_type,
+                           number_of_samples, callback_data):
             
             """A nidaqmx callback that just wrapps"""
             
@@ -903,8 +942,7 @@ class Task:
             callback()
             
             if do_return:            
-                each_signal = self.__read__(nsamples_each,
-                                            each_signal)
+                each_signal = self.__read__(nsamples_each)
                 signal = utl.multiappend(signal, each_signal)
             ntimes += 1
             self.__print__(message.format(ntimes))            
@@ -922,8 +960,7 @@ class Task:
             global ntimes, message
             global each_signal, signal
             
-            each_signal = self.__read__(nsamples_each,
-                                        each_signal)            
+            each_signal = self.__read__(nsamples_each)            
             callback(each_signal)
             
             if do_return:
@@ -934,12 +971,12 @@ class Task:
             return 0
         
         def stop_callback(task_handle, 
-                               every_n_samples_event_type,
-                               number_of_samples, callback_data):
+                          every_n_samples_event_type,
+                          number_of_samples, callback_data):
             
             """A nidaqmx callback that wrapps, reads and stops"""
             
-            global callback
+            global callback, nsamples
             global do_return, nsamples_each, nsamples_acquired
             global ntimes, message
             global each_signal, signal
@@ -947,8 +984,7 @@ class Task:
             nsamples_acquired = ntimes * nsamples_each
             if nsamples_acquired <= nsamples:
                 
-                each_signal = self.__read__(nsamples_each,
-                                            each_signal)
+                each_signal = self.__read__(nsamples_each)
                 callback(each_signal)
                 
                 if do_return:
@@ -974,30 +1010,15 @@ class Task:
                             ]
         
         try:
+            try:
+                self.__print__("Chose '{}' as wrapper".format(
+                    wrapper_callback[option].__name__))
+            except AttributeError:
+                self.__print__("Chose 'None' as wrapper")
             return wrapper_callback[option]
         except IndexError:
             raise KeyError("No callback wrapper found")
-
-    def __read__(self, nsamples, shape):
-        
-        data = self.__task.read(
-            number_of_samples_per_channel=nsamples)
-
-        data = np.array(data).T
-        if self.nchannels == 1:
-            data = np.expand_dims(data, axis=0).T
-        
-        return data
-
-    def __stream_read__(self, nsamples, shape):
-        
-        data = self.__streamer.read_many_sample(
-            shape,
-            number_of_samples_per_channel=nsamples,
-            timeout=20)
-        
-        return data
-        
+          
     def __check_samplerate__(self, samplerate):
         
         if samplerate > 400e3:

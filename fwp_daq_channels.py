@@ -426,10 +426,12 @@ class PWMOutputChannel:
             
         # Reconfigure if needed
         if needs_reconfiguration:
-            if not self.test_mode:
-                self.__channel.co_pulse_duty_cyc = value
-            else:
-                self.__print__("Should 'co_pulse_duty...'")
+            # NOW IT ONLY RECONFIGURES DAQ IF IT'S OFF
+            if not self.status:
+                if not self.test_mode:
+                    self.__channel.co_pulse_duty_cyc = value
+                else:
+                    self.__print__("Should 'co_pulse_duty...'")
             self.__duty_cycle = value
             if self.status:
                 self.status = 'R' # reconfigures
@@ -449,10 +451,12 @@ class PWMOutputChannel:
             
         # Reconfigure if needed
         if needs_reconfiguration:
-            if not self.test_mode:
-                self.__channel.co_pulse_freq = value
-            else:
-                self.__print__("Should 'co_pulse_freq'")
+            # NOW IT ONLY RECONFIGURES DAQ IF IT'S OFF
+            if not self.status:
+                if not self.test_mode:
+                    self.__channel.co_pulse_freq = value
+                else:
+                    self.__print__("Should 'co_pulse_freq'")
             self.__frequency = value
             if self.status:
                 self.status = 'R'
@@ -473,16 +477,20 @@ class PWMOutputChannel:
         # Reconfigure if needed
         if needs_reconfiguration:
             if isinstance(key, str):
-                key = True
+                key = self.__status
             if not self.test_mode:
                 if key:
-                    self.__task.start()
+                    if not self.__status:
+                        self.__task.start()
                     self.streamer.write_one_sample_pulse_frequency(
                             frequency = self.frequency,
                             duty_cycle = self.duty_cycle,
                             )
                 else:
-                    self.__task.stop()
+                    if self.__status:
+                        self.__task.stop()
+                    self.frequency = self.frequency
+                    self.duty_cycle = self.duty_cycle
             else:
                 self.__print__("Should 'start' or 'stop'")
             self.__status = key
