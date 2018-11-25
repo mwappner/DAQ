@@ -373,6 +373,9 @@ class PIDController:
     def __init__(self, setpoint, kp=1.0, ki=0.0, kd=0.0, dt=1, 
                  log_data=False, integrator='windowed'):
 
+        #setpoint transformer defaults to nothing
+        self.setpoint_trsanformer = lambda val: val
+
         #pid parameters
         self.setpoint = setpoint
         self.kp = kp
@@ -386,7 +389,7 @@ class PIDController:
         #fresh p, i and d terms, and clear log
         self.reset()
         self.clearlog()
-        
+                
     def __repr__(self):
         string = 'PIDController with parameters: kp={}, ki={}, kd={}'
         return string.format(self.kp, self.ki, self.kd)
@@ -398,7 +401,7 @@ class PIDController:
     def calculate(self, feedback_value):
         '''Calculates the next step of the PID with given feedback value.'''
 #        self.last_feedback = feedback_value
-        error = self.setpoint - feedback_value
+        error = self.actual_setpoint - feedback_value
 
         delta_error = error - self.last_error
 
@@ -435,8 +438,44 @@ class PIDController:
     @property
     def i_term(self):
         return self.integrator.integral
-
-    #log stuff
+    
+    @property
+    def params(self):
+        return {param:getattr(self, param) for param in
+                ('kp', 'ki', 'kd', 'dt', 'setpoint')}
+    
+    # ##############
+    # Setpoint stuff
+    
+    @property
+    def setpoint_transformer(self):
+        '''A function to transform the setpoint with, to make calcualtions
+        marginaly faster. It should be used to trsanform from units the user
+        inputs as setpoint to the units of the feedback_value for the 
+        PIDController.calulate()method. By default, it does nothing.'''
+        return self.__setpoint_transformer
+    @setpoint_transformer.setter
+    def setpoint_trsanformer(self, fun):
+        try:
+            fun(1)
+        except TypeError as e:
+            msg = ('Value passed to setpoint_setter must be a callable',
+                   'object that trsanforms user-input setpoint to the'
+                   'units the PID uses.')
+            raise TypeError(''.join(msg))
+        self.__setpoint_transformer = fun
+        
+    @property
+    def setpoint(self):
+        return self._setpoint
+    @setpoint.setter
+    def setpoint (self, value):
+        self._setpoint = value
+        self.actual_setpoint = self.setpoint_setter(value) 
+        
+    # #########
+    # Log stuff
+    
     @property
     def log(self):
         #read-only
@@ -453,7 +492,9 @@ class PIDController:
             log.append([prop[i] for prop in self.logger.log])
         return PIDlog._make(log)
 
-    #logger stuff
+    # ############
+    # Logger stuff
+
     @property
     def logger(self):
         return self._logger
@@ -478,8 +519,10 @@ class PIDController:
     @log_data.setter
     def log_data(self, value):
         self.logger.log_data = value
-        
-    #integrator stuff
+       
+    # ################
+    # Integrator stuff
+    
     @property
     def integrator(self):
         return self._integrator
@@ -522,3 +565,37 @@ class PIDController:
         intcls = integral_switcher(integrator_str)
         return intcls(dt)
             
+    # #########################################
+    # Stuff to take into account actuator range
+    
+    @property
+    def control_range(self):
+        return (self.lower, self.upper)
+    @control_range.setter
+    def control_range(self, value):
+        if not isinstance(value, (tuple, list)):
+            raise TypeError('Value must be tuple or list.')
+        if len(value)!=2:
+            raise ValueError('Value must be of lenght 2.')
+        self.lower, self.upper = value
+    
+    @property
+    def lower(self):
+        return self._lower
+    @lower.setter
+    def lower(self, value):
+        if not isinstance(value, (int, float)):
+            raise TypeError('Value must be a number.')
+        self._lower = value
+            
+    @property
+    def upper(self):
+        return self._upper
+    @upper.setter
+    def upper(self, value):
+        if not isinstance(value, (int, float)):
+            raise TypeError('Value must be a number.')
+        self._upper = value
+                
+    def calc_with_range(self, feedback_value):
+        pass
