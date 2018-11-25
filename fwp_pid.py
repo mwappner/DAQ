@@ -374,7 +374,7 @@ class PIDController:
                  log_data=False, integrator='windowed'):
 
         #setpoint transformer defaults to nothing
-        self.setpoint_trsanformer = lambda val: val
+        self.__setpoint_transformer = lambda val: val
 
         #pid parameters
         self.setpoint = setpoint
@@ -455,7 +455,7 @@ class PIDController:
         PIDController.calulate()method. By default, it does nothing.'''
         return self.__setpoint_transformer
     @setpoint_transformer.setter
-    def setpoint_trsanformer(self, fun):
+    def setpoint_transformer(self, fun):
         try:
             fun(1)
         except TypeError as e:
@@ -464,6 +464,7 @@ class PIDController:
                    'units the PID uses.')
             raise TypeError(''.join(msg))
         self.__setpoint_transformer = fun
+        self.actual_setpoint = fun(self.setpoint)
         
     @property
     def setpoint(self):
@@ -471,7 +472,7 @@ class PIDController:
     @setpoint.setter
     def setpoint (self, value):
         self._setpoint = value
-        self.actual_setpoint = self.setpoint_setter(value) 
+        self.actual_setpoint = self.setpoint_transformer(value) 
         
     # #########
     # Log stuff
@@ -486,6 +487,7 @@ class PIDController:
             
     def __makelog__(self):
         '''Make a PIDlog nuamedtuple containing the list of each
+        
         value in each field.'''
         log = []
         for i in range(len(stuff_to_log_list)):
