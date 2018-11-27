@@ -570,6 +570,7 @@ def linear_fit(X, Y, dY=None, showplot=True,
                 fact = -.08
             vertical = [kwargs['text_position'][1]+fact*i for i in range(3)]
         
+
         plt.annotate('m = {}'.format(error_value(
                         m, 
                         dm,
@@ -594,6 +595,7 @@ def linear_fit(X, Y, dY=None, showplot=True,
         plt.annotate(rsqft.format(rsq),
                     (kwargs['text_position'][0], vertical[2]),
                     xycoords='axes fraction')
+
         
         plt.show()
 
@@ -808,7 +810,7 @@ def error_value(X, dX, error_digits=1, units='',
     >> error_value(.133432, .00332, one_point_scale=True, units='V')
     '\\mbox{(0.1334$\\pm$0.0033) V}'
     >> error_value(.133432, .00332, string_scale=False, units='V')
-    '\\mbox{(1.334$\\pm$0.033)$10^-1$ V}'
+    '\\mbox{(1.334$\\pm$0.033)$10^{-1}$ V}'
     
     See Also
     --------
@@ -883,7 +885,7 @@ def error_value(X, dX, error_digits=1, units='',
     # Forth, I make a latex string. Ex.: '(1.34$pm$0.32) kV'
     latex_str = r'({}$\pm${})'.format(measure_value, error_value)
     if not used_string_scale and measure_order != 0:
-        latex_str = latex_str + r'$10^{:.0f}$'.format(scale)      
+        latex_str = latex_str + r'$10^{' + '{:.0f}'.format(scale) + '}$'     
     elif used_string_scale:
         latex_str = latex_str + ' ' + prefix
     if units != '':
