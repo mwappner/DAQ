@@ -561,7 +561,7 @@ def retrieve_header(file, comment_marker='#'):
     
     if first_line[0] == comment_marker:
         header = first_line.split(comment_marker + ' ')[-1]
-        first_line = first_line.split('\n')[0]
+        header = header.split('\n')[0]
         header = header.split('\t')
         if len(header) > 1:
             return header
