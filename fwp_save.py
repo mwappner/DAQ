@@ -101,7 +101,7 @@ def free_file(my_file, newformat='{}_{}'):
     -------
     new_fname : str
         Unoccupied file name (also contains full path and extension).
-        
+    
     """
     
     base = os.path.split(my_file)[0]
@@ -112,18 +112,22 @@ def free_file(my_file, newformat='{}_{}'):
         free_file = my_file
     
     else:
-        sepformat = newformat.split('{}')
+        sepformat = newformat.split('{}')[-2]
         free_file = my_file
         while os.path.isfile(free_file):
             free_file = os.path.splitext(free_file)[0]
-            free_file = free_file.split(sepformat[-2])[-1]
+            free_file = free_file.split(sepformat)
+            number = free_file[-1]
+            free_file = free_file[0]
             try:
                 free_file = newformat.format(
-                        os.path.splitext(my_file)[0],
-                        str(int(free_file)+1),
+                        free_file,
+                        str(int(number)+1),
                         )
             except ValueError:
-                free_file = newformat.format(free_file, 2)
+                free_file = newformat.format(
+                        os.path.splitext(my_file)[0], 
+                        2)
             free_file = os.path.join(base, free_file+extension)
     
     return free_file
@@ -132,7 +136,8 @@ def free_file(my_file, newformat='{}_{}'):
     
 def new_name(name, newseparator='_'):
     '''Returns a name of a unique file or directory so as to not overwrite.
-    If propsed name existed, will return name + newseparator + number.
+    
+    If proposed name existed, will return name + newseparator + number.
      
     Parameters:
     -----------
