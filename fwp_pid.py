@@ -23,7 +23,7 @@ respectively.
 """
 
 from collections import deque, namedtuple
-from fwp_save import new_name
+from fwp_save import new_name, savetxt
 
 #%%
 class InOut(deque):
@@ -55,6 +55,23 @@ def set_props(obj, **props):
 #%% Itegrator classes
 
 class InfiniteIntegrator:
+    '''Infinite integrator class. Integrates over all history.
+    
+    Parameters
+    ----------
+    dt : float
+        Time interval used for discrete integration.
+    integral_so_far : float, optional
+        Used in case the user wants to initialize the integral with some
+        specific history.
+        
+    Methods
+    -------
+    integrate(value)
+        Adds value to history and integrates over all history.
+    reset(integral_so_far=0)
+        Resets history to given integral. Defaults to 0.
+    '''
     
     def __init__(self, dt, integral_so_far=0):
         self.dt = dt
@@ -72,6 +89,25 @@ class InfiniteIntegrator:
 
 
 class WindowIntegrator:
+    '''Window integrator class. Integrates inside a given window.
+    
+    Parameters
+    ----------
+    dt : float
+        Time interval used for discrete integration.
+    integral_so_far : float, optional
+        Used in case the user wants to initialize the integral with some
+        specific history.
+    window_length : int, floatm optional
+        Length of window to integrate in. Defaults to 1000.
+        
+    Methods
+    -------
+    integrate(value)
+        Adds value to history and integrates in given window.
+    reset(integral_so_far=0)
+        Resets history to given integral. Defaults to 0.
+    '''    
     
     def __init__(self, dt, window_length=1000, integral_so_far=0):
         self.dt = dt
@@ -94,11 +130,33 @@ class WindowIntegrator:
         return self._window_length
     @window_length.setter
     def window_length(self, value):
-        self._window_length = value
+        self._window_length = int(value)
         self.window = InOut(size=self.window_length, iterable=self.window)
         self.integral = sum(self.window)
         
 class WeightedIntegrator:
+    '''Weighted integrator class. Integrates over all history with a
+    wieight factor that decreases over time. This way, olver values
+    wieigh less.
+    
+    Parameters
+    ----------
+    dt : float
+        Time interval used for discrete integration.
+    integral_so_far : float, optional
+        Used in case the user wants to initialize the integral with some
+        specific history.
+    alpha : float, optional
+        Factor to calculate weight. The bigger alpha, the faster the weight 
+        decreases, rendering older values less important.
+        
+    Methods
+    -------
+    integrate(value)
+        Adds value to history and integrates over all history with weight.
+    reset(integral_so_far=0)
+        Resets history to given integral. Defaults to 0.
+    '''
     
     def __init__(self, dt, alpha=5, interal_so_far=0):
         self.dt = dt
@@ -124,6 +182,7 @@ integral_types = {
         }    
     
 def integral_switcher(integral_type):
+    '''Selects integral type'''
     if not isinstance(integral_type, str):
         s = 'Integral type should be of class str, not {}.'
         raise TypeError(s.format(type(integral_type)))
@@ -239,14 +298,43 @@ class Logger:
             
         self._write = value
         # If write is True and file is not initialized, do it
-        if self.write and not self.file_initialized:
+        if self.write:
+            self.__initialize_file__()            
+            
+    def __initialize_file__(self, file=None, force_init=False):
+        '''Initialize file with header'''
+        #only if file is not initialized or forece is not on
+        if not self.file_initialized or force_init:
+            if file is None:
+                file = self.file
+            
             # Initialize file with categories as header
             s = '#' + '{}\t' * len(stuff_to_log_list) + '\n'
-            with open(self.file, 'a') as f:
+            with open(file, 'a') as f:
                 f.write(s.format(*stuff_to_log_list))
             
-            self.file_inicialized = True
+            self.file_initialized = True
+            
+    def write_now(self, file=None, force=False, footer=''):
         
+        # If write mode is on, do nothing, unless force=True
+        if self.write and not force:
+            print('File was written while logging. Use force=True to write anyway.')
+            return
+        
+        # If using new given file, initialize it       
+        if file is not None:
+            file = new_name(file)
+            self.__initialize_file__(file, force_init=True)
+        else: 
+            file = self.file
+        
+        with open(file, 'a') as f:
+            for line in self.log:
+                s = self._log_format_complete.format(*line)
+                f.write(s)
+            f.write(footer)
+
     @property
     def log_format(self):
         return self._log_format
