@@ -15,11 +15,12 @@ import fwp_analysis as fan
 import fwp_daq as daq
 import fwp_pid as fpid
 from fwp_plot import add_style
-from fwp_save import savetxt, savefile_helper
+import fwp_save as sav
 from fwp_utils import clip_between
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import nidaqmx as nid
 #from time import sleep
 
 #%%
@@ -79,19 +80,7 @@ task.outputs.pins.duty_cycle = pwm_initial_duty_cycle
 pid.reset()
 pid.clearlog()
 pid.calculate(0) # Initialize with fake first measurement
-
-# Configure data log
-header = ['Feedback value (m/s)', 'New value (a.u.)', 
-          'Proportional term (u.a.)', 'Integral term (u.a.)', 
-          'Derivative term (u.a.)']
-footer = dict(ai_conf=ai_conf,
-              pwm_frequency=pwm_frequency,
-              samplerate=samplerate,
-              nsamples_each=nsamples_each,
-              **pid.params)
-filename_generator = savefile_helper(filename_folder,
-                                     filename_mask)
-             
+            
 ########################## ALGORITHM ##########################
 
 # Define how to calculate velocity
@@ -120,7 +109,7 @@ def calculate_duty_cycle(read_data):
 q = queue.Queue()
 def worker():
     while True:
-        data = q.get() #waits for data to be available
+        data = q.get() # Waits for data to be available
         new_duty_cycle = calculate_duty_cycle(data)
         task.outputs.pins.duty_cycle = new_duty_cycle
 t = threading.Thread(target=worker)
@@ -143,12 +132,24 @@ print("Turn off :/")
 # Close communication
 task.close()
 
-########################## DATA VIEWING ##########################
+########################## DATA MANAGEMENT ##########################
+
+# Configure data log
+header = ['Feedback value (m/s)', 'New value (a.u.)', 
+          'Proportional term (u.a.)', 'Integral term (u.a.)', 
+          'Derivative term (u.a.)']
+footer = dict(ai_conf=ai_conf,
+              pwm_frequency=pwm_frequency,
+              samplerate=samplerate,
+              nsamples_each=nsamples_each,
+              **pid.params)
+filename_generator = sav.savefile_helper(filename_folder,
+                                     filename_mask)
 
 # Save data
 log = np.array(pid.log).T  # Categories by columns
 filename = filename_generator(**pid.params)
-savetxt(os.path.join(os.getcwd(), 'Measurements', 
+sav.savetxt(os.path.join(os.getcwd(), 'Measurements', 
                      'PID', filename),
         log, header=header, footer=footer)
 
@@ -197,3 +198,99 @@ plt.ylabel("PID Parameter (%)")
 add_style()
 mng = plt.get_current_fig_manager()
 mng.window.showMaximized()
+
+#%% CoonCoon
+
+"""Makes a continuous measurement on two analog input."""
+
+# PARAMETERS
+
+device = daq.devices()[0] # Assuming you have only 1 connected NI device.
+ai_pins = [15] # Literally the number of the DAQ pin
+ai_conf = 'Ref' # Referenced mode (measure against GND)
+
+samplerate = 5e3
+nsamples_each = 1000
+
+# ACTIVE CODE
+
+# Initialize communication in order to read
+task = daq.DAQ(device, print_messages=True)
+        
+# Configure input
+task.add_analog_inputs(15)
+task.inputs.pins.configuration = ai_conf
+task.inputs.samplerate = samplerate
+
+# Make a continuous measurement
+signal = task.inputs.read(duration=5, # None means continuous
+                   nsamples_each=nsamples_each,
+                   use_stream=False)
+
+# End communication
+task.close()
+
+# Make a plot
+plt.figure()
+plt.plot(signal)
+
+#%% Cohen_Coon_SMeasure
+
+# Main parameters
+samplerate = 50e3
+mode = nid.constants.TerminalConfiguration.RSE
+
+# Other parameters
+duration = 3
+samples_to_measure = int(samplerate * duration)
+channels = ["Dev1/ai0", "Dev1/ai1"]
+jump = [65, 40]
+
+filename_mask = "Cohen_Coon_{}_{}_jump.txt"
+filename_generator = sav.savefile_helper('Cohen_Coon',
+                                         filename_mask)
+header = ['Tiempo (s)', 'Señal (V)', 'Generador (V)']
+footer = 'samplerate={:.0f}Hz, mode={}'.format(
+        samplerate,
+        str(mode).split('.')[-1])
+
+# ACTIVE CODE
+with nid.Task() as task:
+
+    for channel in channels:
+        # Configure channel
+        task.ai_channels.add_ai_voltage_chan(
+                channel,
+                terminal_config=mode)
+#                ai_max=2,
+#                ai_min=-2)
+        
+    # Set sampling_rate and samples per channel
+    task.timing.cfg_samp_clk_timing(
+            rate=samplerate,
+            samps_per_chan=samples_to_measure)
+        
+    # Measure
+    signal = task.read(
+            number_of_samples_per_channel=samples_to_measure)
+    task.wait_until_done()
+        
+
+time = np.expand_dims(np.linspace(0, duration, samples_to_measure), axis=0)
+
+data = np.array(signal).T
+if data.ndim==1:
+    data = np.expand_dims(data, axis=0).T
+
+data = np.concatenate((time.T, data), axis=1)
+
+sav.savetxt(sav.new_name(filename_generator(*jump)),
+            data,
+            header=header,
+            footer=footer)
+
+print("{:.2f}, {:.2f}".format(min(data[:,1]), max(data[:,1])))
+
+#%%
+
+
