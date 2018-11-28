@@ -307,9 +307,9 @@ def peak_separation(signal, time=1, return_error=False,
     if condition:
         if not len(signal)==len(time):
             raise ValueError('Time and signal must be same lenght.')
-        peak_times = time[peaks]
+        peaks = time[peaks]
     
-    peak_differences = np.diff(peak_times)
+    peak_differences = np.diff(peaks)
         
     if condition:
         if return_error:
@@ -537,7 +537,7 @@ def linear_fit(X, Y, dY=None, showplot=True,
     else:
         W = 1/dY**2
         
-    fit_data = np.polyfit(X,Y,1,cov=True,w=W)
+    fit_data = np.polyfit(X, Y, 1, cov=True, w=W)
     
     m = fit_data[0][0]
     dm = sqrt(fit_data[1][0,0])
@@ -561,10 +561,10 @@ def linear_fit(X, Y, dY=None, showplot=True,
             plt.plot(X, Y, 'b.', zorder=0)
         else:
             if plot_some_errors[0] == False:
-                plt.errorbar(X, Y, yerr=dY, linestyle='', marker='o',
+                plt.errorbar(X, Y, yerr=dY, linestyle='', marker='.',
                              ecolor='b', elinewidth=1.5, zorder=0)
             else:
-                plt.errorbar(X, Y, yerr=dY, linestyle='', marker='o',
+                plt.errorbar(X, Y, yerr=dY, linestyle='', marker='.',
                              color='b', ecolor='b', elinewidth=1.5,
                              errorevery=len(Y)/plot_some_errors[1], 
                              zorder=0)
