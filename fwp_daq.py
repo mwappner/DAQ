@@ -646,7 +646,7 @@ class Task:
             signal = utl.zeros((self.nchannels, nsamples),
                            dtype=np.float64)
         elif do_return: # continuous
-            signal = np.array(dtype=np.float64)
+            signal = np.array([], dtype=np.float64)
             
         # Just in case, be ready for measuring in tiny pieces
         global each_signal, message, ntimes
@@ -693,15 +693,12 @@ class Task:
             else:
                 
                 self.__task.start()
-#                while True:
-#                    try:
-#                        'a'
-#                    except KeyboardInterrupt:
-#                        if do_return:
-#                            return signal
-#                        else:
-#                            return
-                self.__task.wait_until_done()
+                while True:
+                    try:
+                        pass
+                    except KeyboardInterrupt:
+                        break
+#                self.__task.wait_until_done()
                 self.__task.stop()
                 if do_return:
                     return signal 
@@ -726,19 +723,15 @@ class Task:
             else:
                 self.__print__("Should run 'task.start'")
             print("Acquiring... Press Ctrl+C to stop.")
-#            while True:
-#                try:
-#                    'a'
-#                except KeyboardInterrupt:
-#                    self.__task.stop()
-#                    if do_return:
-#                        return signal
-#                    else:
-#                        return
-            try:
-                self.__task.wait_until_done()
-            except KeyboardInterrupt:
-                pass
+            while True:
+                try:
+                    pass
+                except KeyboardInterrupt:
+                    break
+#            try:
+#                self.__task.wait_until_done()
+#            except KeyboardInterrupt:
+#                pass
             self.__task.stop()
             if do_return:
                 return signal 
@@ -993,8 +986,8 @@ class Task:
                 self.__print__(message.format(ntimes))
                 
             else:
-#                raise KeyboardInterrupt
-                self.__task.control(task_states.TASK_STOP)
+                raise KeyboardInterrupt
+#                self.__task.control(task_states.TASK_STOP)
             
             return 0
         
