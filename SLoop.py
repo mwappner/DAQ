@@ -378,6 +378,7 @@ nsamples = 1000
 samplerate = 5e3
 
 wheel_radius = 0.025 # in meters
+chopper_sections = 100 # amount of black spaces on photogate's chopper
 
 # ACTIVE CODE
 
@@ -386,13 +387,15 @@ task = daq.DAQ(device)
 
 # Define how to calculate velocity
 dt = nsamples/samplerate
+circunference = 2 * np.pi * wheel_radius
 def calculate_velocity(read_data):
     photogate_derivative = np.diff(read_data)
-    rotation_period = fan.peak_separation(photogate_derivative, 
-                                           dt, prominence=1, 
-                                           height=2)
-    velocity = wheel_radius/rotation_period
-    return velocity
+    one_section_period = fan.peak_separation(
+            photogate_derivative, 
+            dt, 
+            prominence=1, 
+            height=2)
+    return circunference / (chopper_sections * one_section_period)
 
 # Configure input channel
 task.add_analog_inputs(ai_pin)
@@ -446,6 +449,7 @@ nsamples = 1000
 samplerate = 5e3
 
 wheel_radius = 0.025 # in meters
+chopper_sections = 100 # amount of black spaces on photogate's chopper
 
 # ACTIVE CODE
 
@@ -454,13 +458,15 @@ task = daq.DAQ(device)
 
 # Define how to calculate velocity
 dt = nsamples/samplerate
+circunference = 2 * np.pi * wheel_radius
 def calculate_velocity(read_data):
     photogate_derivative = np.diff(read_data)
-    rotation_period = fan.peak_separation(photogate_derivative, 
-                                           dt, prominence=1, 
-                                           height=2)
-    velocity = wheel_radius/rotation_period
-    return velocity
+    one_section_period = fan.peak_separation(
+            photogate_derivative, 
+            dt, 
+            prominence=1, 
+            height=2)
+    return circunference / (chopper_sections * one_section_period)
 
 # Configure input channel
 task.add_analog_inputs(ai_pin)
@@ -519,6 +525,7 @@ pwm_frequency = 100e3
 pwm_duty_cycle = np.linspace(.1,1,10)
 
 wheel_radius = 0.025 # in meters
+chopper_sections = 100 # amount of black spaces on photogate's chopper
 
 samplerate = 100e3
 nsamples_each = 1000
@@ -530,13 +537,15 @@ task = daq.DAQ(device)
 
 # Define how to calculate velocity
 dt = nsamples/samplerate
+circunference = 2 * np.pi * wheel_radius
 def calculate_velocity(read_data):
     photogate_derivative = np.diff(read_data)
-    rotation_period = fan.peak_separation(photogate_derivative, 
-                                           dt, prominence=1, 
-                                           height=2)
-    velocity = wheel_radius/rotation_period
-    return velocity
+    one_section_period = fan.peak_separation(
+            photogate_derivative, 
+            dt, 
+            prominence=1, 
+            height=2)
+    return circunference / (chopper_sections * one_section_period)
 pid = fan.PIDController(setpoint=1, kp=10, ki=5, kd=7, 
                         dt=dt, log_data=True)
 
@@ -611,6 +620,7 @@ pwm_frequency = 100e3
 pwm_initial_duty = 0.01
 
 wheel_radius = 0.025 # in meters
+chopper_sections = 100 # amount of black spaces on photogate's chopper
 
 samplerate = 100e3
 nsamples_each = 100
@@ -623,13 +633,15 @@ task = daq.DAQ(device)
 
 # Define how to calculate velocity
 dt = nsamples_each/samplerate
+circunference = 2 * np.pi * wheel_radius
 def calculate_velocity(read_data):
     photogate_derivative = np.diff(read_data)
-    rotation_period = fan.peak_separation(photogate_derivative, 
-                                           dt, prominence=1, 
-                                           height=2)
-    velocity = wheel_radius/rotation_period
-    return velocity
+    one_section_period = fan.peak_separation(
+            photogate_derivative, 
+            dt, 
+            prominence=1, 
+            height=2)
+    return circunference / (chopper_sections * one_section_period)
 pid = fpid.PIDController(setpoint=1, kp=10, ki=5, kd=7, 
                          dt=dt, log_data=True)
 

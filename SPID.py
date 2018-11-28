@@ -40,6 +40,7 @@ pwm_initial_duty_cycle = 0.3
 pwm_min_duty_cycle = 0.2
 
 wheel_radius = 0.025 # in meters
+chopper_sections = 100 # amount of black spaces on photogate's chopper
 
 samplerate = 5e3
 nsamples_each = 1000
@@ -84,13 +85,15 @@ pid.calculate(0) # Initialize with fake first measurement
 ########################## ALGORITHM ##########################
 
 # Define how to calculate velocity
+circunference = 2 * np.pi * wheel_radius
 def calculate_velocity(read_data):
     photogate_derivative = np.diff(read_data)
-    rotation_period = fan.peak_separation(photogate_derivative, 
-                                          dt, prominence=1, 
-                                          height=2)
-    velocity = wheel_radius / rotation_period
-    return velocity
+    one_section_period = fan.peak_separation(
+            photogate_derivative, 
+            dt, 
+            prominence=1, 
+            height=2)
+    return circunference / (chopper_sections * one_section_period)
 
 # Define how to calculate duty cycle
 def calculate_duty_cycle(read_data):
@@ -199,7 +202,7 @@ add_style()
 mng = plt.get_current_fig_manager()
 mng.window.showMaximized()
 
-#%% CoonCoon
+#%% Cohen_Coon
 
 """Makes a continuous measurement on two analog input."""
 
