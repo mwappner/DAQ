@@ -518,12 +518,12 @@ class PIDController:
         self.logger.clearlog()
         self.last_log = PIDlog._make([[]]*len(stuff_to_log_list))
 
-    def reset(self):
+    def reset(self, integral_so_far=0):
         '''Reset stored PID values, not parameters or log.'''
         self.last_error = 0
         self.p_term = 0
         self.d_term = 0
-        self.integrator.reset()
+        self.integrator.reset(integral_so_far)
 #        self.last_feedback = 0
 
     @property
