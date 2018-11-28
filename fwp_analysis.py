@@ -186,6 +186,8 @@ def smooth(X, window_len=11, window='hanning'):
     
     length(output) != length(input). To correct this: return 
     y[(window_len/2-1):-(window_len/2)] instead of just y.
+    
+    EDIT: Currently doing this. Return Y to get previous behaviour.
       
     """
 
@@ -194,7 +196,10 @@ def smooth(X, window_len=11, window='hanning'):
 
     if X.size < window_len:
         raise ValueError("X needs to be bigger than window_len.")
-
+        
+    if window_len % 2 !=1:
+        raise ValueError('Window_len should be an odd value.')
+    
     if window_len < 3:
         return X
 
@@ -211,7 +216,9 @@ def smooth(X, window_len=11, window='hanning'):
     
     Y = np.convolve(W/W.sum(), S, mode='valid')
     
-    return Y
+    window_len = int(window_len) 
+    #since window_len is odd, I'll use floor division
+    return Y[(window_len//2):-(window_len//2)] 
 
 #%%
 
