@@ -399,7 +399,9 @@ class Task:
         Parameters
         ----------
         ChannelClass : fwp_daq_channels class
-            New channel/s' class.
+            New channel/s' class. Must have a signature given by 
+            "ChannelClass(device, task, streamer, pin, print_messages, 
+            test_mode, **kwargs)".
         pins : int, optional
             Literally DAQ pin/s' number. Must put at least one.
         **kwargs : optional
