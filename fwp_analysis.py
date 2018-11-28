@@ -186,6 +186,8 @@ def smooth(X, window_len=11, window='hanning'):
     
     length(output) != length(input). To correct this: return 
     y[(window_len/2-1):-(window_len/2)] instead of just y.
+    
+    EDIT: Currently doing this. Return Y to get previous behaviour.
       
     """
 
@@ -194,7 +196,10 @@ def smooth(X, window_len=11, window='hanning'):
 
     if X.size < window_len:
         raise ValueError("X needs to be bigger than window_len.")
-
+        
+    if window_len % 2 !=1:
+        raise ValueError('Window_len should be an odd value.')
+    
     if window_len < 3:
         return X
 
@@ -211,7 +216,9 @@ def smooth(X, window_len=11, window='hanning'):
     
     Y = np.convolve(W/W.sum(), S, mode='valid')
     
-    return Y
+    window_len = int(window_len) 
+    #since window_len is odd, I'll use floor division
+    return Y[(window_len//2):-(window_len//2)] 
 
 #%%
 
@@ -255,17 +262,21 @@ def single_extreme(X, mode='min'):
             
 #%% Distance between peaks
                 
-def peak_separation(signal, time=1, *args, **kwargs):
+def peak_separation(signal, time=1, return_error=False, 
+                    *args, **kwargs):
     '''Calculates mean peak separation.
     
     Parameters
     ----------
     signal : array-like
         Signal to evaluates peaks on
-    time : scalar or array-like
+    time=1 : scalar or array-like
         If scalar, it should indicate time step. If array-like, 
         should be same lenght as signal and correspond to time 
         of measurements.
+    return_error=False : bool
+        If True, returns (peak_separation, error_peak_separation). Else, 
+        just returns peak_separation
 
     Other parameters
     ----------------
@@ -289,18 +300,28 @@ def peak_separation(signal, time=1, *args, **kwargs):
         
     peaks = find_peaks(signal, *args, **kwargs)[0]
     
-    if not peaks: #no peaks found
-        raise ValueError('No peaks found with gien parameters.')
+    if len(peaks)<2: #no peaks found
+        raise ValueError('Not enough peaks found with given parameters.')
     
-    if isinstance(time, (list, tuple, np.ndarray)):
+    condition = isinstance(time, (list, tuple, np.ndarray))
+    if condition:
         if not len(signal)==len(time):
             raise ValueError('Time and signal must be same lenght.')
-            
-        peak_times = time[peaks]
-    else:
-        peak_times = peaks * time
+        peaks = time[peaks]
+    
+    peak_differences = np.diff(peaks)
         
-    return np.mean(peak_times)
+    if condition:
+        if return_error:
+            return (np.mean(peak_differences), np.std(peak_differences))
+        else:
+            return np.mean(peak_differences)
+    else:
+        if return_error:
+            return (np.mean(peak_differences) * time, 
+                    np.std(peak_differences) * time)
+        else:
+            return np.mean(peak_differences) * time
 
 #%% PID class
 
@@ -516,7 +537,7 @@ def linear_fit(X, Y, dY=None, showplot=True,
     else:
         W = 1/dY**2
         
-    fit_data = np.polyfit(X,Y,1,cov=True,w=W)
+    fit_data = np.polyfit(X, Y, 1, cov=True, w=W)
     
     m = fit_data[0][0]
     dm = sqrt(fit_data[1][0,0])
@@ -540,10 +561,10 @@ def linear_fit(X, Y, dY=None, showplot=True,
             plt.plot(X, Y, 'b.', zorder=0)
         else:
             if plot_some_errors[0] == False:
-                plt.errorbar(X, Y, yerr=dY, linestyle='b', marker='.',
+                plt.errorbar(X, Y, yerr=dY, linestyle='', marker='.',
                              ecolor='b', elinewidth=1.5, zorder=0)
             else:
-                plt.errorbar(X, Y, yerr=dY, linestyle='-', marker='.',
+                plt.errorbar(X, Y, yerr=dY, linestyle='', marker='.',
                              color='b', ecolor='b', elinewidth=1.5,
                              errorevery=len(Y)/plot_some_errors[1], 
                              zorder=0)
@@ -570,6 +591,7 @@ def linear_fit(X, Y, dY=None, showplot=True,
                 fact = -.08
             vertical = [kwargs['text_position'][1]+fact*i for i in range(3)]
         
+
         plt.annotate('m = {}'.format(error_value(
                         m, 
                         dm,
@@ -594,6 +616,7 @@ def linear_fit(X, Y, dY=None, showplot=True,
         plt.annotate(rsqft.format(rsq),
                     (kwargs['text_position'][0], vertical[2]),
                     xycoords='axes fraction')
+
         
         plt.show()
 
@@ -808,7 +831,7 @@ def error_value(X, dX, error_digits=1, units='',
     >> error_value(.133432, .00332, one_point_scale=True, units='V')
     '\\mbox{(0.1334$\\pm$0.0033) V}'
     >> error_value(.133432, .00332, string_scale=False, units='V')
-    '\\mbox{(1.334$\\pm$0.033)$10^-1$ V}'
+    '\\mbox{(1.334$\\pm$0.033)$10^{-1}$ V}'
     
     See Also
     --------
@@ -883,7 +906,7 @@ def error_value(X, dX, error_digits=1, units='',
     # Forth, I make a latex string. Ex.: '(1.34$pm$0.32) kV'
     latex_str = r'({}$\pm${})'.format(measure_value, error_value)
     if not used_string_scale and measure_order != 0:
-        latex_str = latex_str + r'$10^{:.0f}$'.format(scale)      
+        latex_str = latex_str + r'$10^{' + '{:.0f}'.format(scale) + '}$'     
     elif used_string_scale:
         latex_str = latex_str + ' ' + prefix
     if units != '':

@@ -23,7 +23,7 @@ respectively.
 """
 
 from collections import deque, namedtuple
-from fwp_save import new_name
+from fwp_save import new_name, savetxt
 
 #%%
 class InOut(deque):
@@ -55,6 +55,23 @@ def set_props(obj, **props):
 #%% Itegrator classes
 
 class InfiniteIntegrator:
+    '''Infinite integrator class. Integrates over all history.
+    
+    Parameters
+    ----------
+    dt : float
+        Time interval used for discrete integration.
+    integral_so_far : float, optional
+        Used in case the user wants to initialize the integral with some
+        specific history.
+        
+    Methods
+    -------
+    integrate(value)
+        Adds value to history and integrates over all history.
+    reset(integral_so_far=0)
+        Resets history to given integral. Defaults to 0.
+    '''
     
     def __init__(self, dt, integral_so_far=0):
         self.dt = dt
@@ -72,6 +89,25 @@ class InfiniteIntegrator:
 
 
 class WindowIntegrator:
+    '''Window integrator class. Integrates inside a given window.
+    
+    Parameters
+    ----------
+    dt : float
+        Time interval used for discrete integration.
+    integral_so_far : float, optional
+        Used in case the user wants to initialize the integral with some
+        specific history.
+    window_length : int, floatm optional
+        Length of window to integrate in. Defaults to 1000.
+        
+    Methods
+    -------
+    integrate(value)
+        Adds value to history and integrates in given window.
+    reset(integral_so_far=0)
+        Resets history to given integral. Defaults to 0.
+    '''    
     
     def __init__(self, dt, window_length=1000, integral_so_far=0):
         self.dt = dt
@@ -94,11 +130,33 @@ class WindowIntegrator:
         return self._window_length
     @window_length.setter
     def window_length(self, value):
-        self._window_length = value
+        self._window_length = int(value)
         self.window = InOut(size=self.window_length, iterable=self.window)
         self.integral = sum(self.window)
         
 class WeightedIntegrator:
+    '''Weighted integrator class. Integrates over all history with a
+    wieight factor that decreases over time. This way, olver values
+    wieigh less.
+    
+    Parameters
+    ----------
+    dt : float
+        Time interval used for discrete integration.
+    integral_so_far : float, optional
+        Used in case the user wants to initialize the integral with some
+        specific history.
+    alpha : float, optional
+        Factor to calculate weight. The bigger alpha, the faster the weight 
+        decreases, rendering older values less important.
+        
+    Methods
+    -------
+    integrate(value)
+        Adds value to history and integrates over all history with weight.
+    reset(integral_so_far=0)
+        Resets history to given integral. Defaults to 0.
+    '''
     
     def __init__(self, dt, alpha=5, interal_so_far=0):
         self.dt = dt
@@ -124,6 +182,7 @@ integral_types = {
         }    
     
 def integral_switcher(integral_type):
+    '''Selects integral type'''
     if not isinstance(integral_type, str):
         s = 'Integral type should be of class str, not {}.'
         raise TypeError(s.format(type(integral_type)))
@@ -239,14 +298,46 @@ class Logger:
             
         self._write = value
         # If write is True and file is not initialized, do it
-        if self.write and not self.file_initialized:
+        if self.write:
+            self.__initialize_file__()            
+            
+    def __initialize_file__(self, file=None, force_init=False):
+        '''Initialize file with header'''
+        #only if file is not initialized or forece is not on
+        if not self.file_initialized or force_init:
+            if file is None:
+                file = self.file
+            
             # Initialize file with categories as header
             s = '#' + '{}\t' * len(stuff_to_log_list) + '\n'
-            with open(self.file, 'a') as f:
+            with open(file, 'a') as f:
                 f.write(s.format(*stuff_to_log_list))
             
-            self.file_inicialized = True
+            self.file_initialized = True
+            
+    def write_now(self, file=None, force=False, footer=None):
+        ''' Write log to file given file. If none is given, Logger.file
+        will be used. File won't be written if Logger.write = True, unless
+        user inputs force=True.'''
+        # If write mode is on, do nothing, unless force=True
+        if self.write and not force:
+            print('File was written while logging. Use force=True to write anyway.')
+            return
         
+        # If using new given file, initialize it       
+        if file is not None:
+            file = new_name(file)
+            self.__initialize_file__(file, force_init=True)
+        else: 
+            file = self.file
+        
+        with open(file, 'a') as f:
+            for line in self.log:
+                s = self._log_format_complete.format(*line)
+                f.write(s)
+            if footer is not None:
+                f.write('# ' + footer)
+
     @property
     def log_format(self):
         return self._log_format
@@ -373,6 +464,9 @@ class PIDController:
     def __init__(self, setpoint, kp=1.0, ki=0.0, kd=0.0, dt=1, 
                  log_data=False, integrator='windowed'):
 
+        #setpoint transformer defaults to nothing
+        self.__setpoint_transformer = lambda val: val
+
         #pid parameters
         self.setpoint = setpoint
         self.kp = kp
@@ -386,7 +480,7 @@ class PIDController:
         #fresh p, i and d terms, and clear log
         self.reset()
         self.clearlog()
-        
+                
     def __repr__(self):
         string = 'PIDController with parameters: kp={}, ki={}, kd={}'
         return string.format(self.kp, self.ki, self.kd)
@@ -398,7 +492,7 @@ class PIDController:
     def calculate(self, feedback_value):
         '''Calculates the next step of the PID with given feedback value.'''
 #        self.last_feedback = feedback_value
-        error = self.setpoint - feedback_value
+        error = self.actual_setpoint - feedback_value
 
         delta_error = error - self.last_error
 
@@ -435,8 +529,45 @@ class PIDController:
     @property
     def i_term(self):
         return self.integrator.integral
-
-    #log stuff
+    
+    @property
+    def params(self):
+        return {param:getattr(self, param) for param in
+                ('kp', 'ki', 'kd', 'dt', 'setpoint')}
+    
+    # ##############
+    # Setpoint stuff
+    
+    @property
+    def setpoint_transformer(self):
+        '''A function to transform the setpoint with, to make calcualtions
+        marginaly faster. It should be used to trsanform from units the user
+        inputs as setpoint to the units of the feedback_value for the 
+        PIDController.calulate()method. By default, it does nothing.'''
+        return self.__setpoint_transformer
+    @setpoint_transformer.setter
+    def setpoint_transformer(self, fun):
+        try:
+            fun(1)
+        except TypeError as e:
+            msg = ('Value passed to setpoint_setter must be a callable',
+                   'object that trsanforms user-input setpoint to the'
+                   'units the PID uses.')
+            raise TypeError(''.join(msg))
+        self.__setpoint_transformer = fun
+        self.actual_setpoint = fun(self.setpoint)
+        
+    @property
+    def setpoint(self):
+        return self._setpoint
+    @setpoint.setter
+    def setpoint (self, value):
+        self._setpoint = value
+        self.actual_setpoint = self.setpoint_transformer(value) 
+        
+    # #########
+    # Log stuff
+    
     @property
     def log(self):
         #read-only
@@ -447,13 +578,16 @@ class PIDController:
             
     def __makelog__(self):
         '''Make a PIDlog nuamedtuple containing the list of each
+        
         value in each field.'''
         log = []
         for i in range(len(stuff_to_log_list)):
             log.append([prop[i] for prop in self.logger.log])
         return PIDlog._make(log)
 
-    #logger stuff
+    # ############
+    # Logger stuff
+
     @property
     def logger(self):
         return self._logger
@@ -478,8 +612,10 @@ class PIDController:
     @log_data.setter
     def log_data(self, value):
         self.logger.log_data = value
-        
-    #integrator stuff
+       
+    # ################
+    # Integrator stuff
+    
     @property
     def integrator(self):
         return self._integrator
@@ -522,3 +658,37 @@ class PIDController:
         intcls = integral_switcher(integrator_str)
         return intcls(dt)
             
+    # #########################################
+    # Stuff to take into account actuator range
+    
+    @property
+    def control_range(self):
+        return (self.lower, self.upper)
+    @control_range.setter
+    def control_range(self, value):
+        if not isinstance(value, (tuple, list)):
+            raise TypeError('Value must be tuple or list.')
+        if len(value)!=2:
+            raise ValueError('Value must be of lenght 2.')
+        self.lower, self.upper = value
+    
+    @property
+    def lower(self):
+        return self._lower
+    @lower.setter
+    def lower(self, value):
+        if not isinstance(value, (int, float)):
+            raise TypeError('Value must be a number.')
+        self._lower = value
+            
+    @property
+    def upper(self):
+        return self._upper
+    @upper.setter
+    def upper(self, value):
+        if not isinstance(value, (int, float)):
+            raise TypeError('Value must be a number.')
+        self._upper = value
+                
+    def calc_with_range(self, feedback_value):
+        pass
