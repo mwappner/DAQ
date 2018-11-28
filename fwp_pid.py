@@ -315,8 +315,10 @@ class Logger:
             
             self.file_initialized = True
             
-    def write_now(self, file=None, force=False, footer=''):
-        
+    def write_now(self, file=None, force=False, footer=None):
+        ''' Write log to file given file. If none is given, Logger.file
+        will be used. File won't be written if Logger.write = True, unless
+        user inputs force=True.'''
         # If write mode is on, do nothing, unless force=True
         if self.write and not force:
             print('File was written while logging. Use force=True to write anyway.')
@@ -333,7 +335,8 @@ class Logger:
             for line in self.log:
                 s = self._log_format_complete.format(*line)
                 f.write(s)
-            f.write(footer)
+            if footer is not None:
+                f.write('# ' + footer)
 
     @property
     def log_format(self):
