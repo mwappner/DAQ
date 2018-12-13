@@ -276,7 +276,9 @@ def peak_separation(signal, time=1, return_error=False,
         of measurements.
     return_error=False : bool
         If True, returns (peak_separation, error_peak_separation). Else, 
-        just returns peak_separation
+        just returns peak_separation. Error is calculated as the standard 
+        deviation of the peak separations over the square root of the ammount 
+        of peaks found.
 
     Other parameters
     ----------------
@@ -313,13 +315,14 @@ def peak_separation(signal, time=1, return_error=False,
         
     if condition:
         if return_error:
-            return (np.mean(peak_differences), np.std(peak_differences))
+            return (np.mean(peak_differences), 
+                    np.std(peak_differences) / np.sqrt(len(peak_differences)))
         else:
             return np.mean(peak_differences)
     else:
         if return_error:
             return (np.mean(peak_differences) * time, 
-                    np.std(peak_differences) * time)
+                    (np.std(peak_differences) / np.sqrt(len(peak_differences))) * time)
         else:
             return np.mean(peak_differences) * time
 
