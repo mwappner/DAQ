@@ -6,6 +6,7 @@ Analisis de Cohen-Coon
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
 from scipy.signal import find_peaks
 import os
 import fwp_string as fst
@@ -148,7 +149,9 @@ for s, t, v in zip(signals, vt, vels):
     
 #%% single datapoint
 
-which = 9
+
+which = 2
+jumps[2] = jumps[1]
 
 dt = np.diff(time[:2])
 maketime = lambda arr, dt: np.linspace(0, dt*len(arr), len(arr))
@@ -169,6 +172,76 @@ ax.set_title(str(jumps[which]))
 ax.grid(True)
     
 plt.tight_layout()
+
+
+#%% Triple figu
+
+completa = 2
+dc = 6
+v = 5
+
+fig = plt.figure(constrained_layout=True)
+fig.set_size_inches([10.24,  4.8 ])
+
+gs = GridSpec(2, 2, figure=fig)
+ax1 = fig.add_subplot(gs[0, :])
+# identical to ax1 = plt.subplot(gs.new_subplotspec((0, 0), colspan=3))
+ax2 = fig.add_subplot(gs[1, 0])
+ax3 = fig.add_subplot(gs[-1, -1])
+
+### Complete ###
+dt = np.diff(time[:2])
+maketime = lambda arr, dt: np.linspace(0, dt*len(arr), len(arr))
+ 
+#plot signal
+ax1.plot(maketime(signals[which], dt), signals[which], linewidth=3, label='Señal PG')
+
+#plot dutycycle
+ax1.plot(maketime(duty_cycles[which], dt), duty_cycles[which], linewidth=2, label='Duty cycle')
+xrange = ax.get_xlim()
+ax1.hlines(jumps[which]/100, *xrange)
+
+#plot vel
+ax1.plot(vt[which], vels[which], '-o', linewidth=3, label='Velocidad')
+ax1.grid(True)
+ax1.set_xlim((0, 3))
+
+#Format
+ax1.set_xlabel('Tiempo [s]', fontsize=15)
+ax1.set_ylabel('Varios [u.arb.]', fontsize=15)
+ax1.legend(fontsize=15)
+ax1.set_title('A: Medición completa', fontsize=20)
+ax1.tick_params(labelsize=15)
+
+### Velocidad ###
+
+vel = fan.smooth(vels[v], 11)
+color = ax1.lines[2].get_color()
+ax2.plot(vt[v], vel, '-o', linewidth=3, label='Velocidad', color=color)
+ax2.grid(True)
+ax2.set_xlim((0, 3))
+ax2.set_title('B: Buena curva de vel.', fontsize=20)
+ax2.set_xlabel('Tiempo [s]', fontsize=15)
+ax2.set_ylabel('Velocidad [u.arb.]', fontsize=15)
+ax2.tick_params(labelsize=15)
+
+### Duty Cycle ###
+
+color = ax1.lines[1].get_color()
+
+ax3.plot(maketime(duty_cycles[dc], dt), duty_cycles[dc] * 100, linewidth=2, 
+         label='Duty cycle', color=color)
+xrange = ax.get_xlim()
+ax3.hlines(jumps[dc], *xrange)
+ax3.set_xlim((0, 3))
+ax3.set_title('C: Buena curva de d.c.', fontsize=20)
+ax3.grid(True)
+ax3.set_xlabel('Tiempo [s]', fontsize=15)
+ax3.set_ylabel('Duty Cycle [%]', fontsize=15)
+ax3.tick_params(labelsize=15)
+
+fig.savefig('cuncun_feo.pdf')
+
 
 #%%
 
