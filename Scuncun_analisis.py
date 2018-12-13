@@ -13,12 +13,12 @@ from fwp_save import retrieve_footer
 import fwp_analysis as fan
 
 parent = os.path.join(os.getcwd(), 'Measurements')
-carpetas = 'Cohen_Coon', 'Cohen_Coon_2', 'PID_0.37'
+carpetas = 'Cohen_Coon', 'Cohen_Coon_2', 'Cohen_Coon_Diff'
 carpetas = [os.path.join(parent, file) for file in carpetas]
 
 #%% Ver qué onda las mediciones
 
-cual_carpeta = 0
+cual_carpeta = 2
 contenidos = os.listdir(carpetas[cual_carpeta])
 contenidos_completos = [os.path.join(carpetas[cual_carpeta], file) for file in contenidos]
 
@@ -35,9 +35,9 @@ def normalize(data, threshold=None):
 def calc_vel(time, singal, **kwargs):
     ds = np.diff(signal)
     picos = find_peaks(ds, **kwargs)[0]
-    vel = np.diff(picos)
+    vel = np.diff(picos).astype(float)
     t = time[picos[:-1]]
-    return t, vel.astype(float)
+    return t, 1/vel
 
 #def fix_vel(vel, threshold):
     
@@ -46,26 +46,27 @@ def calc_vel(time, singal, **kwargs):
 #Select file and extract stuff
 gen_freq = 10e3 #in Hz
 file = contenidos_completos[1]
-salto = fst.find_numbers(file)[-2: -1]
+salto = fst.find_numbers(file)[0:1]
 samplerate = fst.find_1st_number(retrieve_footer(file)) #in Hz
 points_per_gen_period = samplerate / gen_freq
 
 #load data
 time, signal, gen = np.loadtxt(file, unpack=True)
+signal = np.abs(signal)
 gen /= np.mean(gen[gen>4]) # gen now goes between 0 and 1, approx
 
 cada = 200
 #integral = np.array([np.trapz(gen[i:i+cada]) for i in range(len(gen)-cada)])
 #duty_cycle = np.array([np.mean(gen[i:i+cada]) for i in range(len(gen)-cada)])
 
-#ds = normalize(np.diff(signal), 3)
-#signal = normalize(signal, 4)
-#picos = find_peaks(ds, height=.6, prominence=.4)[0]
+ds = normalize(np.diff(signal), 3)
+signal = normalize(signal, 4)
+picos = find_peaks(ds, height=.6, prominence=.4)[0]
 #vel = np.diff(picos)
-t, vel = calc_vel(time, signal, height=3, prominence=2)
+t, vel = calc_vel(time, signal, height=.6, prominence=.4)
 
 plt.plot(time, signal)
-#plt.plot(time[picos], ds[picos],'x')
+#plt.plot(time[picos], ds[picos],'o')
 plt.plot(t, vel)
 
 
@@ -83,25 +84,24 @@ cada = 200
 for file in contenidos_completos:
     
     #retrieve DC jump
-    jumps.append(np.array(fst.find_numbers(file)[-2:])) #last two numbers
+    jumps.append(np.array(fst.find_numbers(file)[:2])) #last two numbers
     
     #load and normalize
     time, signal, gen = np.loadtxt(file, unpack=True)
+    signal = np.abs(signal)
     gen = normalize(gen, 4) # gen now goes between 0 and 1, approx
     signals.append(normalize(signal, 4))
     
     #calculate duty cycles
-    cada = 500
-    #integral = np.array([np.trapz(gen[i:i+cada]) for i in range(len(gen)-cada)])
     this_duty = np.array([np.mean(gen[i:i+cada]) for i in range(len(gen)-cada)])
     duty_cycles.append(this_duty)
     
     #calculate velocity
     t, vel = calc_vel(time, signal, height=3, prominence=2)
-    t = t[vel<1000]
-    vel = vel[vel<1000]
+#    t = t[vel<1000]
+#    vel = vel[vel<1000]
     try:
-        vel = fan.smooth(vel)
+        vel = fan.smooth(vel, window_len=21)
     except ValueError:
         pass
     vel = normalize(vel)
@@ -116,7 +116,7 @@ for file in contenidos_completos:
 dt = np.diff(time[:2])
 maketime = lambda arr, dt: np.linspace(0, dt*len(arr), len(arr))
 
-fig, axarr = plt.subplots(4,2)
+fig, axarr = plt.subplots(5,2)
 
 stuff_to_loop = duty_cycles, jumps, axarr.flat, vt, vels, signals
 
@@ -131,7 +131,7 @@ for dc, j, ax, t, v, s in zip(*stuff_to_loop):
     ax.hlines(j/100, *xrange)
     
     #plot vel
-    ax.plot(t, v, '-o')
+    ax.plot(t, v)
     ax.set_title(str(j))
     ax.grid(True)
     
@@ -148,7 +148,7 @@ for s, t, v in zip(signals, vt, vels):
     
 #%% single datapoint
 
-which = 5
+which = 9
 
 dt = np.diff(time[:2])
 maketime = lambda arr, dt: np.linspace(0, dt*len(arr), len(arr))
@@ -169,3 +169,9 @@ ax.set_title(str(jumps[which]))
 ax.grid(True)
     
 plt.tight_layout()
+
+#%%
+
+#Dos intentos más: 
+# usar calculate_velocity por secciones
+# calular frecuencia con transformade de fourier
