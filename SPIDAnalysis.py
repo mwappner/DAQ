@@ -83,7 +83,7 @@ add_style(markersize=12, fontsize=16)
 #%% 1. How constant is the period algon a single measurement
 
 widths = []
-for k, d in enumerate(data):
+for k, (d, duty) in enumerate(zip(data, duty_cycle)):
     dt = d[1,0]
     read_data = d[:,1]
     
@@ -102,7 +102,7 @@ for k, d in enumerate(data):
     f, ax = plt.subplots()
     ax.hist(w) #8 bins
     ax.legend({'Count = {}'.format(len(w))})
-    ax.set_title('{}/{}'.format(k+1, len(data)))
+    ax.set_title('{}/{}: duty={}%'.format(k+1, len(data), duty))
     
     ax.set_xlabel('Duration [s]')
     ax.set_ylabel('Count')
@@ -111,7 +111,7 @@ for k, d in enumerate(data):
     
     # Save and close plot
     name = os.path.join('Measurements', 'Velfigs', 'Histograms',
-                    'vel{}.png'.format(k+1))
+                    'duty{}.png'.format(duty))
     plt.tight_layout()
     f.savefig(name)
     plt.close(f)
@@ -175,11 +175,12 @@ for d in data:
         
 #%% Create all figures and save them
 
-for k, (v, iv, idv) in enumerate(zip(velocity, increase_vel, increase_dv)):
+for k, (v, iv, idv, duty) in enumerate(
+        zip(velocity, increase_vel, increase_dv, duty_cycle)):
 
     # Create subplots
     f, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
-    f.suptitle('{}/{}'.format(k+1, len(velocity)))
+    f.suptitle('{}/{}: duty={}%'.format(k+1, len(data), duty))
     
     # Plot Durations
     ax1.plot(durations, iv, '-x')
@@ -198,7 +199,7 @@ for k, (v, iv, idv) in enumerate(zip(velocity, increase_vel, increase_dv)):
     f.subplots_adjust(hspace=0)
 
     name = os.path.join('Measurements', 'Velfigs', 'Increasing',
-                        'vel{}.png'.format(k+1))
+                        'duty{}.png'.format(duty))
     f.savefig(name)
     plt.close(f)
     
@@ -284,42 +285,112 @@ for m, d in enumerate(data):
     print('Done doing {}/{}'.format(m+1, len(data)))
     
 #%% Plots:
-    
+
+## Just one plot to test formatting
+#    
+#cual = 17
+#means = increase_vel[cual]
+#v = increase_all[cual]
+#duty = duty_cycle[cual]
+#k = cual
+#
+## Create two subplots with different widths
+#f, (ax1, ax2) = plt.subplots(1,2, sharey=True, 
+#   gridspec_kw = {'width_ratios':[5, 2]})
+##f.suptitle('{}/{}: duty={}%'.format(k+1, len(data), duty))
+#f.set_size_inches([7.15, 6.1 ])
+#
+## Plot all points
+#for d, vel in zip(durations, v):
+#    points = ax1.plot([d] * len(vel), vel, '.r')
+#points[0].set_label('Variability')
+#
+##Plot mean and final values
+#ax1.plot(durations, means, 'x-', label='Mean value')      
+#ax1.hlines(means[-1], durations[0], durations[-1], label='Final value')
+#
+##Format legend, labels and grid
+#ax1.legend()
+#ax1.set_xlabel('Duration [s]')
+#ax1.set_ylabel('Vel. [cm/s]')
+#ax1.ticklabel_format(axis='x', style='sci', scilimits=(0,0))
+#ax1.grid(True)
+#ax1.set_title('{}/{}: duty={}%'.format(k+1, len(data), duty))
+#
+##Create histogram plot 
+##flattened = [x for data in v for x in data]
+##ax2.hist(flattened, 20, orientation='horizontal')
+#for vels, d in zip(v[::4], durations[::4]):
+#    ax2.hist(vels, 7, orientation='horizontal', density=True,
+#             alpha=.6, label='{:.2f} s'.format(d))
+#ax2.set_xlabel('Density')
+#ax2.grid(True)
+#ax2.legend()
+#
+##labels = ['{:.2f} s'.format(d) for d in durations[::4]] 
+##ax2.legend(patches, labels)
+#
+## Save and close plot
+#plt.tight_layout()
+#f.subplots_adjust(wspace=0)
+##name = os.path.join('Measurements', 'Velfigs', 'Variability',
+##                    'All', 'vel{}.png'.format(k+1))
+##f.savefig(name)
+##plt.close(f)
+
+#%%
 # 1: All points for a given duration with mean value
 
-for k, (v, means) in enumerate(zip(increase_all, increase_vel)):
-
-    # Create, plot and format histogram
-    f, ax = plt.subplots()
+for k, (v, means, duty) in enumerate(
+        zip(increase_all, increase_vel, duty_cycle)):
     
+    # Create two subplots with different widths
+    f, (ax1, ax2) = plt.subplots(1,2, sharey=True, 
+       gridspec_kw = {'width_ratios':[5, 2]})
+    #f.suptitle('{}/{}: duty={}%'.format(k+1, len(data), duty))
+    f.set_size_inches([7.15, 6.1 ])
+    
+    # Plot all points
     for d, vel in zip(durations, v):
-        ax.plot([d] * len(vel), vel, '.r')
-  
-    ax.plot(durations, means, 'x-', label='Mean value')      
-    ax.hlines(means[-1], durations[0], durations[-1], label='Final value')
+        points = ax1.plot([d] * len(vel), vel, '.r')
+    points[0].set_label('Variability')
     
-    ax.set_title('{}/{}'.format(k+1, len(data)))
-    ax.legend()
+    #Plot mean and final values
+    ax1.plot(durations, means, 'x-', label='Mean value')      
+    ax1.hlines(means[-1], durations[0], durations[-1], label='Final value')
     
-    ax.set_xlabel('Duration [s]')
-    ax.set_ylabel('Vel. [cm/s]')
-    ax.ticklabel_format(axis='x', style='sci', scilimits=(0,0))
-    ax.grid(True)
+    #Format legend, labels and grid
+    ax1.legend()
+    ax1.set_xlabel('Duration [s]')
+    ax1.set_ylabel('Vel. [cm/s]')
+    ax1.ticklabel_format(axis='x', style='sci', scilimits=(0,0))
+    ax1.grid(True)
+    ax1.set_title('{}/{}: duty={}%'.format(k+1, len(data), duty))
+    
+    #Create histogram plot for one out of every 4 values
+    for vels, d in zip(v[::4], durations[::4]):
+        ax2.hist(vels, 7, orientation='horizontal', density=True,
+                 alpha=.6, label='{:.2f} s'.format(d))
+    ax2.set_xlabel('Density')
+    ax2.grid(True)
+    ax2.legend()
     
     # Save and close plot
     plt.tight_layout()
+    f.subplots_adjust(wspace=0)
     name = os.path.join('Measurements', 'Velfigs', 'Variability',
-                        'All', 'vel{}.png'.format(k+1))
+                        'All', 'duty{}.png'.format(duty))
     f.savefig(name)
     plt.close(f)
 
 # 2: Std and deviation of the mean from real value
 
-for k, (v, iv, idv) in enumerate(zip(velocity, increase_vel, increase_dv)):
+for k, (v, iv, idv, duty) in enumerate(
+        zip(velocity, increase_vel, increase_dv, duty_cycle)):
 
     # Create subplots
     f, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
-    f.suptitle('{}/{}'.format(k+1, len(velocity)))
+    f.suptitle('{}/{}: duty={}%'.format(k+1, len(data), duty))
     
     # Plot diff of mean and real value
     ax1.plot(durations, np.abs(iv - iv[-1]), 'o-')
@@ -337,7 +408,7 @@ for k, (v, iv, idv) in enumerate(zip(velocity, increase_vel, increase_dv)):
     f.subplots_adjust(hspace=0)
 
     name = os.path.join('Measurements', 'Velfigs', 'Variability',
-                        'Std', 'vel{}.png'.format(k+1))
+                        'Std', 'duty{}.png'.format(duty))
     f.savefig(name)
     plt.close(f)
     
