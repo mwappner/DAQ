@@ -23,7 +23,7 @@ carpetas = [os.path.join(parent, file) for file in carpetas]
 cual_carpeta = 2
 contenidos = os.listdir(carpetas[cual_carpeta])
 contenidos_completos = [os.path.join(carpetas[cual_carpeta], file) for file in contenidos]
-footers = [sav.retrieve_footer(f) for f in contenidos_completos]
+#footers = [sav.retrieve_footer(f) for f in contenidos_completos]
 
 def normalize(data, threshold=None):
     
@@ -35,7 +35,7 @@ def normalize(data, threshold=None):
     
     return dataout
 
-def calc_vel(time, singal, **kwargs):
+def calc_vel(time, signal, **kwargs):
     ds = np.diff(signal)
     picos = find_peaks(ds, **kwargs)[0]
     period = np.diff(picos).astype(float)
@@ -255,20 +255,22 @@ for k, (file, name) in enumerate(zip(contenidos_completos, contenidos)):
     gen_freq = 10e3 #in Hz
 #    file = contenidos_completos[cual]
     salto = fst.find_numbers(file)[0:2]
-    samplerate = fst.find_1st_number(retrieve_footer(file)) #in Hz
+    samplerate =200000 #in Hz
     points_per_gen_period = samplerate / gen_freq
     
     #load data
-    time, signal, gen = np.loadtxt(file, unpack=True)
+    time, signal, gen,filt = np.loadtxt(file, unpack=True)
     dt = time[1]
     
     # Calculate and store widths (periods)
-    peaks = find_peaks(np.diff(signal), prominence=1, height=2)[0]
+    peaks = find_peaks(np.diff(filt),prominence=0.04,height=0.06)[0]
     peaks = peaks.astype(float) * dt
     w = np.diff(peaks)
     #widths.append(w)
     plt.figure()
-    plt.hist(w, 30, range=(0.03, 1))
+    plt.hist(w, 30, range=(0, 0.06))
+    #plt.plot(time[0:10000],filt[0:10000])
+    #plt.plot(time[5500:6000],np.diff(filt)[5500:6000],'r.')
     plt.title('Duty {} a {}'.format(*salto))
     
     savename = os.path.splitext(name)[0] + '.jpg'
