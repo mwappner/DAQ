@@ -441,7 +441,7 @@ class Task:
         self.__nchannels = self.nchannels + len(new_channels)
         self.streamer = None
         self.samplerate = None
-        self.buffersize = None
+#        self.buffersize = None
     
     @property
     def streamer(self):
@@ -508,44 +508,44 @@ class Task:
                     self.__print__("Should 'task.timing.cgf_samp...'")
                 self.__samplerate = value
 
-    @property
-    def buffersize(self):
-        if self.write_mode:
-            return TypeError("This task is meant to write!")
-        else:
-            return self.__buffersize
-    
-    """Some things we would have liked to do research on:
-    task.streamer._in_stream.channels_to_read
-    task.streamer._in_stream.logging_file_path
-    task.streamer._in_stream.configure_logging
-    task.streamer._in_stream.curr_read_pos
-    task.streamer._in_stream.read_all_avail_samp
-    task.streamer._in_stream.input_onbrd_buf_size
-    """
-    
-    @buffersize.setter
-    def buffersize(self, value):
-        if self.write_mode:
-            return TypeError("This task is meant to write!")
-        else:
-            
-            # Check if I need to reconfigure
-            try:
-                needs_reconfiguration = self.__buffersize != value
-            except:
-                needs_reconfiguration = True
-                
-            # Reconfigure if needed
-            if needs_reconfiguration:
-                if not self.test_mode:
-                    if value is None: # Default value is DAQ's one.
-                        value = self.streamer._in_stream.input_buf_size
-                    else:
-                        self.streamer._in_stream.input_buf_size = value
-                else:
-                    self.__print__("Should 'streamer._in_stream.in...'")
-                self.__buffersize = value
+#    @property
+#    def buffersize(self):
+#        if self.write_mode:
+#            return TypeError("This task is meant to write!")
+#        else:
+#            return self.__buffersize
+#    
+#    """Some things we would have liked to do research on:
+#    task.streamer._in_stream.channels_to_read
+#    task.streamer._in_stream.logging_file_path
+#    task.streamer._in_stream.configure_logging
+#    task.streamer._in_stream.curr_read_pos
+#    task.streamer._in_stream.read_all_avail_samp
+#    task.streamer._in_stream.input_onbrd_buf_size
+#    """
+#    
+#    @buffersize.setter
+#    def buffersize(self, value):
+#        if self.write_mode:
+#            return TypeError("This task is meant to write!")
+#        else:
+#            
+#            # Check if I need to reconfigure
+#            try:
+#                needs_reconfiguration = self.__buffersize != value
+#            except:
+#                needs_reconfiguration = True
+#                
+#            # Reconfigure if needed
+#            if needs_reconfiguration:
+#                if not self.test_mode:
+#                    if value is None: # Default value is DAQ's one.
+#                        value = self.streamer._in_stream.input_buf_size
+#                    else:
+#                        self.streamer._in_stream.input_buf_size = value
+#                else:
+#                    self.__print__("Should 'streamer._in_stream.in...'")
+#                self.__buffersize = value
     
     def read(self, nsamples=None, samplerate=None, duration=None,
              callback=None, nsamples_each=200, use_stream=True, 
@@ -729,6 +729,7 @@ class Task:
                 try:
                     pass
                 except KeyboardInterrupt:
+                    print("Stopped acquiring")
                     break
 #            try:
 #                self.__task.wait_until_done()
