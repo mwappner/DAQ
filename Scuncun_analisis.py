@@ -12,6 +12,7 @@ import os
 import fwp_string as fst
 from fwp_save import retrieve_footer
 import fwp_analysis as fan
+import fwp_save as sav
 
 parent = os.path.join(os.getcwd(), 'Measurements')
 carpetas = 'Cohen_Coon', 'Cohen_Coon_2', 'Cohen_Coon_Diff'
@@ -22,6 +23,7 @@ carpetas = [os.path.join(parent, file) for file in carpetas]
 cual_carpeta = 2
 contenidos = os.listdir(carpetas[cual_carpeta])
 contenidos_completos = [os.path.join(carpetas[cual_carpeta], file) for file in contenidos]
+footers = [sav.retrieve_footer(f) for f in contenidos_completos]
 
 def normalize(data, threshold=None):
     
@@ -36,17 +38,20 @@ def normalize(data, threshold=None):
 def calc_vel(time, singal, **kwargs):
     ds = np.diff(signal)
     picos = find_peaks(ds, **kwargs)[0]
-    vel = np.diff(picos).astype(float)
+    period = np.diff(picos).astype(float)
     t = time[picos[:-1]]
-    return t, 1/vel
+    return t, 1/period
 
 #def fix_vel(vel, threshold):
     
 #%%
 
+#which file?
+cual = 1
+
 #Select file and extract stuff
 gen_freq = 10e3 #in Hz
-file = contenidos_completos[1]
+file = contenidos_completos[cual]
 salto = fst.find_numbers(file)[0:1]
 samplerate = fst.find_1st_number(retrieve_footer(file)) #in Hz
 points_per_gen_period = samplerate / gen_freq
@@ -62,7 +67,7 @@ cada = 200
 
 ds = normalize(np.diff(signal), 3)
 signal = normalize(signal, 4)
-picos = find_peaks(ds, height=.6, prominence=.4)[0]
+#picos = find_peaks(ds, height=.6, prominence=.4)[0]
 #vel = np.diff(picos)
 t, vel = calc_vel(time, signal, height=.6, prominence=.4)
 
@@ -243,8 +248,65 @@ ax3.tick_params(labelsize=15)
 fig.savefig('cuncun_feo.pdf')
 
 
+#%% Histogramas de  duración de los períodos:
+
+#Select file and extract stuff
+for k, (file, name) in enumerate(zip(contenidos_completos, contenidos)):
+    gen_freq = 10e3 #in Hz
+#    file = contenidos_completos[cual]
+    salto = fst.find_numbers(file)[0:2]
+    samplerate = fst.find_1st_number(retrieve_footer(file)) #in Hz
+    points_per_gen_period = samplerate / gen_freq
+    
+    #load data
+    time, signal, gen = np.loadtxt(file, unpack=True)
+    dt = time[1]
+    
+    # Calculate and store widths (periods)
+    peaks = find_peaks(np.diff(signal), prominence=1, height=2)[0]
+    peaks = peaks.astype(float) * dt
+    w = np.diff(peaks)
+    #widths.append(w)
+    plt.figure()
+    plt.hist(w, 30, range=(0.03, 1))
+    plt.title('Duty {} a {}'.format(*salto))
+    
+    savename = os.path.splitext(name)[0] + '.jpg'
+    plt.savefig(os.path.join('Measurements', 'CCfigs', 'Histograms', savename))
+    plt.close()
+    
+    print('Done doing {}/{}'.format(k+1, len(contenidos_completos)))
+
 #%%
 
 #Dos intentos más: 
 # usar calculate_velocity por secciones
-# calular frecuencia con transformade de fourier
+    
+#%% Calular frecuencia con transformade de fourier
+
+for k, (file, name) in enumerate(zip(contenidos_completos, contenidos)):
+
+    salto = fst.find_numbers(file)[0:2]
+    time, signal, gen = np.loadtxt(file, unpack=True)
+
+    f, (ax1, ax2) = plt.subplots(2,1, sharex=True)
+    f.set_size_inches([9.79, 5.26])
+    
+    ax1.plot(time, signal)
+    ax1.set_xlim((time[0], time[-1]))
+    ax1.set_ylabel('Señal [V]')
+    ax1.grid(True)
+    plt.title('Duty {} a {}'.format(*salto))
+
+    ax2.specgram(signal, Fs=200000)
+    ax2.set_xlabel('Tiempo [s]')
+    ax2.set_ylabel('Frecuencia [Hz]')
+    ax2.ticklabel_format(axis='y', style='sci', scilimits=(0,0))
+    
+    f.subplots_adjust(hspace=0)
+    savename = os.path.splitext(name)[0] + '.jpg'
+    f.savefig(os.path.join('Measurements', 'CCfigs', 'Sonograms', savename))
+    plt.close(f)
+    
+    print('Done doing {}/{}'.format(k+1, len(contenidos_completos)))
+
